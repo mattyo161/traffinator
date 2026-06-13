@@ -137,28 +137,33 @@ kubectl -n traffinator delete pvc -l app.kubernetes.io/instance=traffinator
 ## Publishing the chart to GHCR (OCI)
 
 CI publishes the packaged chart to GitHub Container Registry as an OCI artifact
-so it can be consumed without cloning the repo (e.g. by ArgoCD).
+so it can be consumed without cloning the repo (e.g. by ArgoCD). Published to
+**`ghcr.io/mattyo161/charts/traffinator:<version>`** via `GITHUB_TOKEN` +
+`packages: write` (no PAT). [`publish-chart.yml`](../../../.github/workflows/publish-chart.yml)
+publishes in two ways:
 
-- Workflow: [`.github/workflows/publish-chart.yml`](../../../.github/workflows/publish-chart.yml)
-  runs on pushes to `main` that touch `deploy/helm/traffinator/**` (and on
-  manual dispatch). Auth is `GITHUB_TOKEN` with `packages: write` — no PAT.
-- Published to: **`ghcr.io/mattyo161/charts/traffinator:<version>`**, where
-  `<version>` is the `version:` field in `Chart.yaml`.
-- **Bump `version:` in `Chart.yaml` on every chart change** — OCI tags are
-  immutable, so each chart release needs a new SemVer. The workflow skips (with
-  a warning) if the version already exists. `appVersion` stays tied to the app
-  image and is independent of the chart `version`.
-- **First publish:** after the initial push, make the package **public** in
-  GHCR (repo → Packages → `traffinator` chart → Package settings → Change
-  visibility), matching the public container images — otherwise consumers need a
-  pull secret for the chart.
+- **On every app release (primary):** `release.yml` calls it with the
+  semantic-release version, packaging with `--version`/`--app-version` = the app
+  version. So **chart and app track together** — releasing app `0.4.0` also
+  publishes chart `0.4.0`. This is the main path; you don't bump `Chart.yaml`
+  by hand for normal releases.
+- **On a chart-only change to `main` (or manual dispatch):** publishes the
+  `version:` from `Chart.yaml`. For an out-of-band chart change without an app
+  release, bump that field (OCI tags are immutable; the job skips with a warning
+  if the version already exists).
+
+`Chart.yaml`'s `version:` is therefore a **baseline** for manual/chart-only
+publishes; released versions come from the app version.
+
+> **Visibility:** the `traffinator` chart package is public (matches the public
+> container images), so no pull secret is needed.
 
 Pull/inspect manually:
 ```bash
-helm show chart oci://ghcr.io/mattyo161/charts/traffinator --version 0.1.0
-helm pull oci://ghcr.io/mattyo161/charts/traffinator --version 0.1.0
+helm show chart oci://ghcr.io/mattyo161/charts/traffinator --version 0.3.0
+helm pull oci://ghcr.io/mattyo161/charts/traffinator --version 0.3.0
 helm upgrade --install traffinator oci://ghcr.io/mattyo161/charts/traffinator \
-  --version 0.1.0 -n traffinator --create-namespace -f my-values.yaml
+  --version 0.3.0 -n traffinator --create-namespace -f my-values.yaml
 ```
 
 ### Deploy via ArgoCD from the OCI chart
@@ -173,7 +178,7 @@ spec:
   sources:
     - repoURL: ghcr.io/mattyo161/charts      # note: no oci:// prefix here
       chart: traffinator
-      targetRevision: 0.1.0                   # pin the chart version
+      targetRevision: 0.3.0                   # pin the chart version
       helm:
         valueFiles:
           - $values/deploy/helm/traffinator/values-homelab.yaml
