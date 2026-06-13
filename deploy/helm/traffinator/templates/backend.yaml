@@ -63,6 +63,16 @@ spec:
                 name: {{ $be }}-env
             - secretRef:
                 name: {{ include "traffinator.secretName" . }}
+          {{- if .Values.externalDatabase.existingSecret }}
+          # DATABASE_URL pulled from an external secret (e.g. a CNPG app
+          # secret); this env entry overrides any value from envFrom above.
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalDatabase.existingSecret }}
+                  key: {{ .Values.externalDatabase.existingSecretKey }}
+          {{- end }}
           # The entrypoint waits for the DB and runs migrations before gunicorn,
           # so startupProbe gives that first-boot work generous time.
           startupProbe:

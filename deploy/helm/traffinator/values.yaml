@@ -91,9 +91,17 @@ postgres:
     accessMode: ReadWriteOnce
 
 externalDatabase:
-  # Used only when postgres.enabled=false. Full SQLAlchemy-style URL.
-  # The target must have the `cube` and `earthdistance` extensions available.
+  # Used only when postgres.enabled=false. The target must have the `cube` and
+  # `earthdistance` extensions available (Supabase, RDS/Aurora, or a CNPG
+  # Cluster on this cluster).
+  #
+  # Provide the connection EITHER as a plain URL here, OR (preferred — keeps the
+  # password out of values/this chart's Secret) by pointing at an existing
+  # Secret that already holds a connection URL. CloudNativePG publishes exactly
+  # this: its `<cluster>-app` Secret has a ready-to-use `uri` key.
   url: ""
+  existingSecret: ""          # e.g. "traffinator-db-app" (a CNPG app secret)
+  existingSecretKey: "uri"    # key in that secret holding the full DATABASE_URL
 
 # -----------------------------------------------------------------------------
 # Ingress (k3s ships Traefik as the default IngressClass)
