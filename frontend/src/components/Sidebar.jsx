@@ -2,7 +2,7 @@ import LocationField from './LocationField'
 import { PALETTES } from '../palettes'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const INTERVALS = [5, 10, 15, 30]
+const INTERVALS = [15, 30]
 const HOURS = Array.from({ length: 24 }, (_, h) => h)
 
 function hourLabel(h) {
