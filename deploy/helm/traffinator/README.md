@@ -67,13 +67,34 @@ docker save traffinator-backend:dev | sudo k3s ctr images import -   # repeat pe
 
 ## 2. Install
 
+> **Image prerequisite:** the GHCR images are built by the
+> `build-images` workflow, which runs **on push to `main`**. So merge the chart
+> (and the app code you want to ship) to `main` first — CI publishes
+> `ghcr.io/mattyo161/traffinator-{backend,frontend}` — then deploy. For a quick
+> pre-merge test, use the local build+import fallback in §1.
+
+### Homelab (mattyo161/homelab)
+A ready overlay is provided — Longhorn storage + Traefik/cert-manager under
+`*.oue.home`:
+
+```bash
+helm upgrade --install traffinator deploy/helm/traffinator \
+  -n traffinator --create-namespace \
+  -f deploy/helm/traffinator/values-homelab.yaml \
+  -f my-secrets.yaml          # see below; keep secrets out of git
+```
+Opens at `https://traffinator.oue.home` (add the host to DNS / `/etc/hosts`).
+After CI publishes images, pin the tag in the overlay
+(`backend.image.tag` / `frontend.image.tag`) to a SHA or version.
+
+### Generic
 ```bash
 helm install traffinator deploy/helm/traffinator \
   --namespace traffinator --create-namespace \
   --set ingress.host=traffinator.lan
 ```
 
-Provide secrets inline or, better, with a values file (`-f my-values.yaml`):
+Provide secrets with a values file (`-f my-secrets.yaml`), not inline:
 
 ```yaml
 secrets:
@@ -82,8 +103,22 @@ secrets:
   openRouteServiceApiKey: ""         # optional; blank -> public OSRM for routing
 ```
 
-Then point the hostname at your node (e.g. add `traffinator.lan` to your
-router's DNS, or `/etc/hosts` for a quick test).
+Then point the hostname at your node (e.g. add the host to your router's DNS, or
+`/etc/hosts` for a quick test).
+
+### Using a CloudNativePG database instead of the bundled Postgres
+Once the CNPG operator + a `Cluster` (e.g. `traffinator-db`) exist (see
+[../../docs/runbooks/postgres-operations.md](../../docs/runbooks/postgres-operations.md)),
+switch the app to it — no password in chart values, pulled from the CNPG app
+secret's `uri` key:
+
+```yaml
+postgres:
+  enabled: false
+externalDatabase:
+  existingSecret: traffinator-db-app
+  existingSecretKey: uri
+```
 
 ## 3. Upgrade / uninstall
 
@@ -109,9 +144,11 @@ kubectl -n traffinator delete pvc -l app.kubernetes.io/instance=traffinator
 | `imagePullSecrets` | `[]` | `[{name: ghcr}]` if GHCR packages are private |
 | `ingress.enabled` / `.host` / `.className` | `true` / `traffinator.local` / `traefik` | |
 | `ingress.tls.enabled` / `.secretName` | `false` / `traffinator-tls` | Bring your own cert secret |
-| `postgres.enabled` | `true` | Set `false` + `externalDatabase.url` for Supabase/external |
+| `postgres.enabled` | `true` | Set `false` for external/CNPG (see below) |
 | `postgres.persistence.size` | `5Gi` | |
-| `postgres.persistence.storageClass` | `""` | `""` = cluster default (`local-path`) |
+| `postgres.persistence.storageClass` | `""` | `""` = cluster default; set `longhorn` on the homelab |
+| `externalDatabase.url` | `""` | Plain connection URL when `postgres.enabled=false` |
+| `externalDatabase.existingSecret` / `.existingSecretKey` | `""` / `uri` | Pull `DATABASE_URL` from an existing secret (e.g. a CNPG `<cluster>-app` secret) — keeps the password out of chart values |
 | `secrets.googleMapsApiKey` | `""` | Blank → configure via in-app setup screen |
 | `secrets.googleOauthClientId` | `""` | Enables Google sign-in; also served to the SPA |
 | `secrets.openRouteServiceApiKey` | `""` | Blank → routing falls back to public OSRM |
