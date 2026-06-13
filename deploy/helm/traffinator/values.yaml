@@ -7,21 +7,24 @@ fullnameOverride: ""
 # -----------------------------------------------------------------------------
 # Images
 # -----------------------------------------------------------------------------
-# Build and make these available to the cluster first. Two common homelab paths:
-#   A) Push to a registry the nodes can reach, set repository/tag accordingly.
-#   B) Build locally and import into k3s containerd:
-#        docker build -t traffinator-backend:1.0.0 ./backend
-#        docker save traffinator-backend:1.0.0 | sudo k3s ctr images import -
-#      (repeat for the frontend) and keep pullPolicy: IfNotPresent.
+# Images are published to GHCR by .github/workflows/build-images.yml. The
+# workflow tags each push with: the short git SHA, the branch name, `latest`
+# (on main), and a semver (on `v*` git tags). For a multi-node cluster, pin to
+# an immutable tag (a git SHA or a version) rather than `latest`.
+#   tag "" below falls back to the chart appVersion.
 image:
   pullPolicy: IfNotPresent
-# Optional registry secret names for private registries.
+# Required if the GHCR packages are PRIVATE. Create the secret first:
+#   kubectl -n <ns> create secret docker-registry ghcr \
+#     --docker-server=ghcr.io --docker-username=<github-user> \
+#     --docker-password=<PAT-with-read:packages>
+# then list it here: [{ name: ghcr }]. Not needed if the packages are public.
 imagePullSecrets: []
 
 backend:
   image:
-    repository: traffinator-backend
-    tag: "1.0.0"
+    repository: ghcr.io/mattyo161/traffinator-backend
+    tag: ""   # "" -> chart appVersion
   replicas: 1
   # Keep at 1 unless you move DB migrations out of the entrypoint into a Job:
   # the entrypoint runs `migrate` on start, which shouldn't race across pods.
@@ -37,8 +40,8 @@ backend:
 
 frontend:
   image:
-    repository: traffinator-frontend
-    tag: "1.0.0"
+    repository: ghcr.io/mattyo161/traffinator-frontend
+    tag: ""   # "" -> chart appVersion
   replicas: 1
   resources:
     requests:

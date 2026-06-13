@@ -14,27 +14,56 @@ The frontend is the only externally exposed component; its nginx proxies `/api`
 to the backend in-cluster (the chart rewrites the proxy target to the
 release's backend Service via a mounted config).
 
-## 1. Build images and get them onto the cluster
+## 1. Images (GHCR via GitHub Actions)
 
-The chart does not build images. Build from the repo root and either push to a
-registry your nodes can reach, or import straight into k3s containerd:
+Images are built and pushed to **GitHub Container Registry** by
+[`.github/workflows/build-images.yml`](../../../.github/workflows/build-images.yml).
+It runs on pushes to `main`, on `v*` tags, and on manual dispatch, producing:
 
-```bash
-# Build
-docker build -t traffinator-backend:1.0.0 ./backend
-docker build -t traffinator-frontend:1.0.0 ./frontend
+- `ghcr.io/mattyo161/traffinator-backend`
+- `ghcr.io/mattyo161/traffinator-frontend`
 
-# Option A — import into k3s (single node, no registry needed)
-docker save traffinator-backend:1.0.0  | sudo k3s ctr images import -
-docker save traffinator-frontend:1.0.0 | sudo k3s ctr images import -
+Each push is tagged with the short git SHA, the branch name, `latest` (on
+`main`), and a semver (when you push a `v1.2.3` git tag). On a **multi-node**
+cluster, pin the chart to an immutable tag — a SHA or a version — not `latest`,
+so every node runs the same image:
 
-# Option B — push to your registry, then set image.*.repository in values
-#   docker tag traffinator-backend:1.0.0 registry.example/traffinator-backend:1.0.0
-#   docker push registry.example/traffinator-backend:1.0.0
+```yaml
+backend:  { image: { tag: "sha-1a2b3c4" } }   # or "1.0.0" from a v1.0.0 tag
+frontend: { image: { tag: "sha-1a2b3c4" } }
 ```
 
-With Option A keep `image.pullPolicy: IfNotPresent` (the default) so k3s uses
-the imported image instead of trying to pull it.
+Leaving `tag: ""` falls back to the chart's `appVersion`.
+
+### Pull secret (only if the GHCR packages are private)
+
+New GHCR packages are private by default. Either make them public
+(repo → Packages → package → Settings → Change visibility), or create a pull
+secret in the release namespace and reference it:
+
+```bash
+kubectl -n traffinator create secret docker-registry ghcr \
+  --docker-server=ghcr.io \
+  --docker-username=mattyo161 \
+  --docker-password=<a PAT or token with read:packages>
+```
+
+```yaml
+imagePullSecrets:
+  - name: ghcr
+```
+
+### Local build fallback (no registry)
+
+For a quick single-node test without the registry you can still build and
+import into k3s containerd, then point the chart at the local tag with
+`pullPolicy: IfNotPresent`:
+
+```bash
+docker build -t traffinator-backend:dev ./backend
+docker save traffinator-backend:dev | sudo k3s ctr images import -   # repeat per node
+# helm ... --set backend.image.repository=traffinator-backend --set backend.image.tag=dev
+```
 
 ## 2. Install
 
@@ -74,9 +103,10 @@ kubectl -n traffinator delete pvc -l app.kubernetes.io/instance=traffinator
 
 | Key | Default | Notes |
 |---|---|---|
-| `backend.image.repository` / `.tag` | `traffinator-backend` / `1.0.0` | |
-| `frontend.image.repository` / `.tag` | `traffinator-frontend` / `1.0.0` | |
-| `image.pullPolicy` | `IfNotPresent` | Right for k3s-imported images |
+| `backend.image.repository` / `.tag` | `ghcr.io/mattyo161/traffinator-backend` / `""` | `""` → chart appVersion; pin a SHA/version for multi-node |
+| `frontend.image.repository` / `.tag` | `ghcr.io/mattyo161/traffinator-frontend` / `""` | as above |
+| `image.pullPolicy` | `IfNotPresent` | Fine with immutable tags |
+| `imagePullSecrets` | `[]` | `[{name: ghcr}]` if GHCR packages are private |
 | `ingress.enabled` / `.host` / `.className` | `true` / `traffinator.local` / `traefik` | |
 | `ingress.tls.enabled` / `.secretName` | `false` / `traffinator-tls` | Bring your own cert secret |
 | `postgres.enabled` | `true` | Set `false` + `externalDatabase.url` for Supabase/external |
