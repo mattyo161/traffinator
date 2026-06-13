@@ -2,15 +2,25 @@ name: Build and push images
 
 # Builds the backend and frontend images and pushes them to GitHub Container
 # Registry (GHCR) so the k3s cluster can pull the same image on every node.
+#
+# This is a *reusable* workflow: release.yml calls it after semantic-release so
+# the published images carry the computed version. It can also be run manually
+# (workflow_dispatch) to rebuild from the current ref.
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - ".github/workflows/build-images.yml"
+  workflow_call:
+    inputs:
+      version:
+        description: "Semantic version to also tag images with (e.g. 1.2.3). Empty = only sha/latest."
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Optional version tag to apply to the images."
+        type: string
+        required: false
+        default: ""
 
 env:
   REGISTRY: ghcr.io
@@ -46,10 +56,9 @@ jobs:
           # Image name is lowercased automatically (e.g. ghcr.io/mattyo161/traffinator-backend)
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/traffinator-${{ matrix.name }}
           tags: |
-            type=semver,pattern={{version}}
-            type=ref,event=branch
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
