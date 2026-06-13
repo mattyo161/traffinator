@@ -68,7 +68,8 @@ runs [semantic-release](https://semantic-release.gitbook.io/):
 
 ## Branches & pull requests
 
-- Work on a branch; open a PR into `main`.
+- **All changes go through PRs** — never commit directly to `main`
+- Branch off `main`, make changes, open a PR
 - **AI agents (Claude) may create branches and PRs but MUST NOT merge a PR** —
   merging is always a human decision. Don't push directly to `main` (it's the
   protected default branch); changes land via PR.
