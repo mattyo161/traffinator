@@ -1,0 +1,66 @@
+name: Release
+
+# semantic-release versions the project from Conventional Commits on `main`:
+# it determines the next SemVer, creates the git tag (vX.Y.Z) and a GitHub
+# Release with generated notes. It uses GITHUB_TOKEN only and does NOT push to
+# main (which is protected), so no PAT and no auto-merge are involved.
+#
+# Because tags created with GITHUB_TOKEN don't trigger other workflows, the
+# versioned image build is invoked here (reusable build-images.yml) in the same
+# run when a release is cut — so published images carry the released version.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Set at workflow level so both the release job and the reusable image-build job
+# (which needs packages: write) have the permissions they need.
+permissions:
+  contents: write          # create tags + GitHub Releases
+  issues: write            # semantic-release can comment on issues
+  pull-requests: write     # ...and on PRs included in the release
+  packages: write          # reusable build pushes images to GHCR
+
+# One release at a time.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.semantic.outputs.new_release_published }}
+      version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - name: Checkout (full history for commit analysis)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run semantic-release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          # Needed for the "conventionalcommits" preset in .releaserc.json.
+          # Unpinned so it resolves a version compatible with the action's
+          # bundled semantic-release.
+          extra_plugins: |
+            conventional-changelog-conventionalcommits
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build + push version-tagged images only when a release was cut.
+  images:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    uses: ./.github/workflows/build-images.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    secrets: inherit
