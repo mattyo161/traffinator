@@ -1,0 +1,16 @@
+apiVersion: v2
+name: traffinator
+description: Traffinator — predictive commute-time analyzer (Django API + React SPA + PostgreSQL)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - commute
+  - traffic
+  - django
+  - react
+home: https://github.com/mattyo161/traffinator
+sources:
+  - https://github.com/mattyo161/traffinator
+maintainers:
+  - name: mattyo161

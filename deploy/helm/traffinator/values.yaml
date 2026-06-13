@@ -1,0 +1,115 @@
+# Default values for Traffinator on k3s.
+# Tuned for a homelab single-node cluster: Traefik ingress + local-path storage.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# -----------------------------------------------------------------------------
+# Images
+# -----------------------------------------------------------------------------
+# Build and make these available to the cluster first. Two common homelab paths:
+#   A) Push to a registry the nodes can reach, set repository/tag accordingly.
+#   B) Build locally and import into k3s containerd:
+#        docker build -t traffinator-backend:1.0.0 ./backend
+#        docker save traffinator-backend:1.0.0 | sudo k3s ctr images import -
+#      (repeat for the frontend) and keep pullPolicy: IfNotPresent.
+image:
+  pullPolicy: IfNotPresent
+# Optional registry secret names for private registries.
+imagePullSecrets: []
+
+backend:
+  image:
+    repository: traffinator-backend
+    tag: "1.0.0"
+  replicas: 1
+  # Keep at 1 unless you move DB migrations out of the entrypoint into a Job:
+  # the entrypoint runs `migrate` on start, which shouldn't race across pods.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  env:
+    DJANGO_DEBUG: "0"
+    ANALYSIS_MAX_WORKERS: "8"
+
+frontend:
+  image:
+    repository: traffinator-frontend
+    tag: "1.0.0"
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# -----------------------------------------------------------------------------
+# Secrets — API keys and credentials.
+# Leave the Google Maps key blank to configure it later via the in-app setup
+# screen (it persists in the DB on the PVC). ENV always wins if set here.
+# DJANGO_SECRET_KEY and the Postgres password are auto-generated and preserved
+# across upgrades if left blank (via a Secret lookup). Provide existingSecret
+# to manage all of these yourself instead.
+# -----------------------------------------------------------------------------
+secrets:
+  existingSecret: ""        # if set, the chart won't create/own a Secret
+  googleMapsApiKey: ""
+  googleOauthClientId: ""   # enables Google sign-in (also exposed to the SPA)
+  appleOauthClientId: ""    # leave blank; Apple sign-in is scaffolded/disabled
+  openRouteServiceApiKey: "" # blank -> map routing falls back to public OSRM
+  djangoSecretKey: ""       # blank -> generated & preserved across upgrades
+
+# -----------------------------------------------------------------------------
+# Bundled PostgreSQL (with cube/earthdistance, created by app migrations).
+# Set postgres.enabled=false and externalDatabase.url to use Supabase/external.
+# -----------------------------------------------------------------------------
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16-alpine"
+  database: commute
+  username: commute
+  password: ""              # blank -> generated & preserved across upgrades
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""        # "" uses the cluster default (local-path on k3s)
+    accessMode: ReadWriteOnce
+
+externalDatabase:
+  # Used only when postgres.enabled=false. Full SQLAlchemy-style URL.
+  # The target must have the `cube` and `earthdistance` extensions available.
+  url: ""
+
+# -----------------------------------------------------------------------------
+# Ingress (k3s ships Traefik as the default IngressClass)
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: traefik
+  host: traffinator.local
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: traffinator-tls
+
+service:
+  # ClusterIP for all internal services; ingress is the external entrypoint.
+  type: ClusterIP
+
+podSecurityContext: {}
+securityContext: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
