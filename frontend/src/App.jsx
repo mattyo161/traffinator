@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
+import { useAuth } from './auth/AuthContext'
 import SetupWizard from './components/SetupWizard'
 import Sidebar from './components/Sidebar'
 import CommuteChart from './components/CommuteChart'
 import RoutePreview from './components/RoutePreview'
+import AccountBar from './components/AccountBar'
 
 const DEFAULT_PARAMS = {
   origin: null,
@@ -17,23 +19,25 @@ const DEFAULT_PARAMS = {
 }
 
 export default function App() {
-  const [setupState, setSetupState] = useState('loading') // loading | needed | ready
+  const { ready: authReady, mapsConfigured, setMapsConfigured } = useAuth()
+  const [skipped] = useState(() => !!localStorage.getItem('setupSkipped'))
   const [params, setParams] = useState(DEFAULT_PARAMS)
   const [results, setResults] = useState(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState(null)
   const [highlightDay, setHighlightDay] = useState(null)
 
-  useEffect(() => {
-    api
-      .setupStatus()
-      .then((s) =>
-        setSetupState(
-          s.configured || localStorage.getItem('setupSkipped') ? 'ready' : 'needed'
-        )
-      )
-      .catch((e) => setError(`Cannot reach backend: ${e.message}`))
-  }, [])
+  const setupState = !authReady ? 'loading' : mapsConfigured || skipped ? 'ready' : 'needed'
+
+  function applyRoute(routeParams) {
+    setParams((p) => ({ ...p, ...routeParams }))
+    setResults(null)
+  }
+
+  function applyAddress(which, addr) {
+    const point = { lat: addr.lat, lng: addr.lng, label: addr.address }
+    setParams((p) => ({ ...p, [which]: point }))
+  }
 
   const estimatedCalls = useMemo(() => {
     const slots =
@@ -77,10 +81,11 @@ export default function App() {
   if (setupState === 'needed') {
     return (
       <SetupWizard
-        onConfigured={() => setSetupState('ready')}
+        onConfigured={() => setMapsConfigured(true)}
         onSkip={() => {
           localStorage.setItem('setupSkipped', '1')
-          setSetupState('ready')
+          // Force re-render via params (skipped is read once); reload is simplest.
+          window.location.reload()
         }}
       />
     )
@@ -94,19 +99,24 @@ export default function App() {
         onRun={runAnalysis}
         running={running}
         estimatedCalls={estimatedCalls}
+        onApplyRoute={applyRoute}
+        onApplyAddress={applyAddress}
       />
       <main className="flex min-h-[60vh] flex-1 flex-col gap-4 p-4 lg:overflow-y-auto">
-        <header>
-          <h1 className="text-xl font-bold text-slate-800">
-            Traffinator
-            <span className="ml-2 text-sm font-medium italic text-slate-400">
-              "I'll be fast."
-            </span>
-          </h1>
-          <p className="text-sm text-slate-500">
-            Predictive drive-time trends by day of week, with min–max confidence bands.
-            Click or hover a day in the legend to highlight it.
-          </p>
+        <header className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-slate-800">
+              Traffinator
+              <span className="ml-2 text-sm font-medium italic text-slate-400">
+                "I'll be fast."
+              </span>
+            </h1>
+            <p className="text-sm text-slate-500">
+              Predictive drive-time trends by day of week, with min–max confidence bands.
+              Click or hover a day in the legend to highlight it.
+            </p>
+          </div>
+          <AccountBar />
         </header>
 
         {error && (

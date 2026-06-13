@@ -41,3 +41,57 @@ class TrafficSample(models.Model):
         indexes = [
             models.Index(fields=["vector", "day_of_week"]),
         ]
+
+
+class RouteGeometry(models.Model):
+    """Cached driving-route geometry (the road path drawn on the map).
+
+    Stored as an ordered list of [lat, lng] points. Cached spatially so
+    near-identical requests reuse the same polyline, which also seeds future
+    corridor/overlap analysis between commutes."""
+
+    origin_lat = models.FloatField()
+    origin_lng = models.FloatField()
+    dest_lat = models.FloatField()
+    dest_lng = models.FloatField()
+    provider = models.CharField(max_length=20)
+    distance_m = models.PositiveIntegerField(null=True, blank=True)
+    geometry = models.JSONField()  # [[lat, lng], ...]
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class SavedAddress(models.Model):
+    """A user's saved place (home, work, gym, ...)."""
+
+    user = models.ForeignKey(
+        "auth.User", on_delete=models.CASCADE, related_name="saved_addresses"
+    )
+    label = models.CharField(max_length=120)
+    address = models.CharField(max_length=500)
+    lat = models.FloatField()
+    lng = models.FloatField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["label"]
+
+
+class SavedRoute(models.Model):
+    """A user's saved commute: endpoints plus the analysis parameters."""
+
+    user = models.ForeignKey(
+        "auth.User", on_delete=models.CASCADE, related_name="saved_routes"
+    )
+    name = models.CharField(max_length=120)
+    origin_label = models.CharField(max_length=500)
+    origin_lat = models.FloatField()
+    origin_lng = models.FloatField()
+    dest_label = models.CharField(max_length=500)
+    dest_lat = models.FloatField()
+    dest_lng = models.FloatField()
+    params = models.JSONField(default=dict)  # vector, hours, interval, days, palette
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
