@@ -4,3 +4,8 @@ __pycache__/
 node_modules/
 dist/
 .DS_Store
+
+# Local DB dumps / CSV exports produced by docs/runbooks/scripts
+exports/
+docs/runbooks/scripts/exports/
+docs/runbooks/scripts/backups/

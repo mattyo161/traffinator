@@ -95,6 +95,9 @@ replication lag, last backup).
 
 ## 2. Dumps & backups
 
+> For extracting table data to **CSV** (external analysis, spreadsheets,
+> pandas), see [postgres-csv-export.md](postgres-csv-export.md).
+
 ### 2a. Logical dump (portable; for schema remap, migrations, off-box copies)
 [`scripts/db-dump.sh`](scripts/db-dump.sh):
 ```bash
