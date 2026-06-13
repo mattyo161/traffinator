@@ -134,6 +134,61 @@ key survive). Remove it manually if you want a clean slate:
 kubectl -n traffinator delete pvc -l app.kubernetes.io/instance=traffinator
 ```
 
+## Publishing the chart to GHCR (OCI)
+
+CI publishes the packaged chart to GitHub Container Registry as an OCI artifact
+so it can be consumed without cloning the repo (e.g. by ArgoCD).
+
+- Workflow: [`.github/workflows/publish-chart.yml`](../../../.github/workflows/publish-chart.yml)
+  runs on pushes to `main` that touch `deploy/helm/traffinator/**` (and on
+  manual dispatch). Auth is `GITHUB_TOKEN` with `packages: write` — no PAT.
+- Published to: **`ghcr.io/mattyo161/charts/traffinator:<version>`**, where
+  `<version>` is the `version:` field in `Chart.yaml`.
+- **Bump `version:` in `Chart.yaml` on every chart change** — OCI tags are
+  immutable, so each chart release needs a new SemVer. The workflow skips (with
+  a warning) if the version already exists. `appVersion` stays tied to the app
+  image and is independent of the chart `version`.
+- **First publish:** after the initial push, make the package **public** in
+  GHCR (repo → Packages → `traffinator` chart → Package settings → Change
+  visibility), matching the public container images — otherwise consumers need a
+  pull secret for the chart.
+
+Pull/inspect manually:
+```bash
+helm show chart oci://ghcr.io/mattyo161/charts/traffinator --version 0.1.0
+helm pull oci://ghcr.io/mattyo161/charts/traffinator --version 0.1.0
+helm upgrade --install traffinator oci://ghcr.io/mattyo161/charts/traffinator \
+  --version 0.1.0 -n traffinator --create-namespace -f my-values.yaml
+```
+
+### Deploy via ArgoCD from the OCI chart
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traffinator
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: ghcr.io/mattyo161/charts      # note: no oci:// prefix here
+      chart: traffinator
+      targetRevision: 0.1.0                   # pin the chart version
+      helm:
+        valueFiles:
+          - $values/deploy/helm/traffinator/values-homelab.yaml
+    - repoURL: https://github.com/mattyo161/traffinator.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traffinator
+  syncPolicy:
+    syncOptions: [CreateNamespace=true]
+```
+(If the chart package is private, register the OCI repo in ArgoCD with
+credentials + `enableOCI: true`.)
+
 ## Key values
 
 | Key | Default | Notes |
