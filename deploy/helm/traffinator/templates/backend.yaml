@@ -1,0 +1,98 @@
+{{- $be := include "traffinator.backend.fullname" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $be }}
+  labels:
+    {{- include "traffinator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: 8000
+      targetPort: http
+      name: http
+  selector:
+    {{- include "traffinator.selectorLabels" (dict "ctx" . "component" "backend") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $be }}
+  labels:
+    {{- include "traffinator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "traffinator.selectorLabels" (dict "ctx" . "component" "backend") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "traffinator.labels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+      annotations:
+        # Roll pods when secret/config change so new env is picked up.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-backend.yaml") . | sha256sum }}
+        {{- if not .Values.secrets.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: {{ $be }}-env
+            - secretRef:
+                name: {{ include "traffinator.secretName" . }}
+          # The entrypoint waits for the DB and runs migrations before gunicorn,
+          # so startupProbe gives that first-boot work generous time.
+          startupProbe:
+            httpGet:
+              path: /api/setup/status
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/setup/status
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/setup/status
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
