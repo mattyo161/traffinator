@@ -18,7 +18,8 @@ contrib modules we use (`cube`, `earthdistance`). No custom image to maintain.
 > mechanics apply to any Postgres, the CNPG-specific bits are called out.
 
 Helper scripts live in [`scripts/`](scripts/): `db-env.sh` (shared, CNPG-aware),
-`db-dump.sh`, `db-restore-to-schema.sh`.
+`db-dump.sh`, `db-restore-to-schema.sh`. For the table/column reference and ER
+diagrams, see [../database-schema.md](../database-schema.md).
 
 ---
 
