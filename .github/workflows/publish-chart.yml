@@ -1,21 +1,37 @@
 name: Publish Helm chart
 
 # Packages the Helm chart at deploy/helm/traffinator and pushes it to GHCR as an
-# OCI artifact:  ghcr.io/<owner>/charts/traffinator:<Chart.yaml version>
+# OCI artifact:  ghcr.io/<owner>/charts/traffinator:<version>
 #
-# OCI tags are immutable, so the chart `version:` in Chart.yaml MUST be bumped
-# (SemVer) on every chart change. This workflow skips publishing if the version
-# already exists, and emits a warning nudging you to bump it.
+# Version resolution:
+#   - Called from release.yml with `version` = the app release version, the chart
+#     is packaged with --version/--app-version = that version, so chart and app
+#     track together on every release.
+#   - On a chart-only push to main (or manual dispatch without a version), the
+#     Chart.yaml `version:` is used.
 #
-# Runs independently of the image build — image tags are pinned on the consumer
-# (chart values) side. Auth is GITHUB_TOKEN with packages: write (same org).
+# OCI tags are immutable, so the job skips (with a warning) if that version is
+# already published. Auth is GITHUB_TOKEN with packages: write (same org).
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to publish the chart as (e.g. 0.3.0). Empty = Chart.yaml version."
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish the chart as. Empty = Chart.yaml version."
+        type: string
+        required: false
+        default: ""
   push:
     branches: [main]
     paths:
       - "deploy/helm/traffinator/**"
       - ".github/workflows/publish-chart.yml"
-  workflow_dispatch:
 
 jobs:
   publish-chart:
@@ -26,17 +42,24 @@ jobs:
     env:
       OCI_REPO: oci://ghcr.io/${{ github.repository_owner }}/charts
       CHART_DIR: deploy/helm/traffinator
+      INPUT_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: azure/setup-helm@v4
 
-      - name: Read chart version
+      - name: Resolve version (release input wins; else Chart.yaml)
         id: chart
         run: |
-          version="$(awk '/^version:/{print $2; exit}' "$CHART_DIR/Chart.yaml")"
+          if [ -n "$INPUT_VERSION" ]; then
+            version="$INPUT_VERSION"
+            echo "from_release=true" >> "$GITHUB_OUTPUT"
+          else
+            version="$(awk '/^version:/{print $2; exit}' "$CHART_DIR/Chart.yaml")"
+            echo "from_release=false" >> "$GITHUB_OUTPUT"
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Chart version: $version"
+          echo "Publishing chart version: $version"
 
       - name: Log in to GHCR (Helm OCI)
         run: |
@@ -48,14 +71,22 @@ jobs:
         run: |
           if helm show chart "$OCI_REPO/traffinator" --version "${{ steps.chart.outputs.version }}" >/dev/null 2>&1; then
             echo "already=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::traffinator chart ${{ steps.chart.outputs.version }} already exists in GHCR; bump version: in Chart.yaml to publish a new release."
+            echo "::warning::traffinator chart ${{ steps.chart.outputs.version }} already exists in GHCR; nothing to publish."
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Package and push chart
         if: steps.exists.outputs.already == 'false'
+        env:
+          V: ${{ steps.chart.outputs.version }}
         run: |
-          helm package "$CHART_DIR"
-          helm push "traffinator-${{ steps.chart.outputs.version }}.tgz" "$OCI_REPO"
-          echo "Published $OCI_REPO/traffinator:${{ steps.chart.outputs.version }}"
+          if [ "${{ steps.chart.outputs.from_release }}" = "true" ]; then
+            # Release: pin both chart version and appVersion to the app version.
+            helm package "$CHART_DIR" --version "$V" --app-version "$V"
+          else
+            # Chart-only / manual: use Chart.yaml's version and appVersion.
+            helm package "$CHART_DIR"
+          fi
+          helm push "traffinator-${V}.tgz" "$OCI_REPO"
+          echo "Published $OCI_REPO/traffinator:${V}"
