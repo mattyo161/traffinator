@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-commute}
+      POSTGRES_USER: ${POSTGRES_USER:-commute}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-commute}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-commute} -d ${POSTGRES_DB:-commute}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://commute:commute@db:5432/commute}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
+      ANALYSIS_MAX_WORKERS: ${ANALYSIS_MAX_WORKERS:-8}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${APP_PORT:-8900}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Runs Vitest inside the node build stage: `docker compose run --rm frontend-test`
+  frontend-test:
+    profiles: ["test"]
+    build:
+      context: ./frontend
+      target: build
+    command: ["npm", "test"]
+
+volumes:
+  pgdata:
