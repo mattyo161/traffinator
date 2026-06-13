@@ -1,0 +1,48 @@
+# Homelab overlay for the mattyo161/homelab k3s cluster.
+#   helm upgrade --install traffinator deploy/helm/traffinator \
+#     -n traffinator --create-namespace -f deploy/helm/traffinator/values-homelab.yaml
+#
+# Matches the cluster's conventions: Longhorn storage, Traefik + cert-manager
+# under *.oue.home. See docs/runbooks/postgres-operations.md for the CNPG path.
+
+# Pin to an immutable tag once CI has published images to GHCR (a git SHA from
+# the build-images workflow, or a v1.x.x release tag). "" = chart appVersion.
+backend:
+  image: { tag: "" }
+frontend:
+  image: { tag: "" }
+
+# Uncomment if the GHCR packages are private (see chart README for the secret):
+# imagePullSecrets:
+#   - name: ghcr
+
+ingress:
+  enabled: true
+  className: traefik
+  host: traffinator.oue.home
+  annotations:
+    cert-manager.io/cluster-issuer: selfsigned-cluster-issuer
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  tls:
+    enabled: true
+    secretName: traffinator-tls
+
+# --- Database -----------------------------------------------------------------
+# Default here: the chart's bundled Postgres on Longhorn — deployable today.
+postgres:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClass: longhorn
+    size: 5Gi
+
+# --- CNPG alternative (preferred target; enable once the operator is installed)
+# Deploy a CloudNativePG Cluster named `traffinator-db` separately (ArgoCD
+# session), then switch the app to it by disabling the bundled Postgres and
+# pointing DATABASE_URL at the CNPG app secret's `uri` key:
+#
+# postgres:
+#   enabled: false
+# externalDatabase:
+#   existingSecret: traffinator-db-app
+#   existingSecretKey: uri

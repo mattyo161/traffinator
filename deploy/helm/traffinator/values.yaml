@@ -1,0 +1,126 @@
+# Default values for Traffinator on k3s.
+# Tuned for a homelab single-node cluster: Traefik ingress + local-path storage.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# -----------------------------------------------------------------------------
+# Images
+# -----------------------------------------------------------------------------
+# Images are published to GHCR by .github/workflows/build-images.yml. The
+# workflow tags each push with: the short git SHA, the branch name, `latest`
+# (on main), and a semver (on `v*` git tags). For a multi-node cluster, pin to
+# an immutable tag (a git SHA or a version) rather than `latest`.
+#   tag "" below falls back to the chart appVersion.
+image:
+  pullPolicy: IfNotPresent
+# Required if the GHCR packages are PRIVATE. Create the secret first:
+#   kubectl -n <ns> create secret docker-registry ghcr \
+#     --docker-server=ghcr.io --docker-username=<github-user> \
+#     --docker-password=<PAT-with-read:packages>
+# then list it here: [{ name: ghcr }]. Not needed if the packages are public.
+imagePullSecrets: []
+
+backend:
+  image:
+    repository: ghcr.io/mattyo161/traffinator-backend
+    tag: ""   # "" -> chart appVersion
+  replicas: 1
+  # Keep at 1 unless you move DB migrations out of the entrypoint into a Job:
+  # the entrypoint runs `migrate` on start, which shouldn't race across pods.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  env:
+    DJANGO_DEBUG: "0"
+    ANALYSIS_MAX_WORKERS: "8"
+
+frontend:
+  image:
+    repository: ghcr.io/mattyo161/traffinator-frontend
+    tag: ""   # "" -> chart appVersion
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# -----------------------------------------------------------------------------
+# Secrets — API keys and credentials.
+# Leave the Google Maps key blank to configure it later via the in-app setup
+# screen (it persists in the DB on the PVC). ENV always wins if set here.
+# DJANGO_SECRET_KEY and the Postgres password are auto-generated and preserved
+# across upgrades if left blank (via a Secret lookup). Provide existingSecret
+# to manage all of these yourself instead.
+# -----------------------------------------------------------------------------
+secrets:
+  existingSecret: ""        # if set, the chart won't create/own a Secret
+  googleMapsApiKey: ""
+  googleOauthClientId: ""   # enables Google sign-in (also exposed to the SPA)
+  appleOauthClientId: ""    # leave blank; Apple sign-in is scaffolded/disabled
+  openRouteServiceApiKey: "" # blank -> map routing falls back to public OSRM
+  djangoSecretKey: ""       # blank -> generated & preserved across upgrades
+
+# -----------------------------------------------------------------------------
+# Bundled PostgreSQL (with cube/earthdistance, created by app migrations).
+# Set postgres.enabled=false and externalDatabase.url to use Supabase/external.
+# -----------------------------------------------------------------------------
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16-alpine"
+  database: commute
+  username: commute
+  password: ""              # blank -> generated & preserved across upgrades
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""        # "" uses the cluster default (local-path on k3s)
+    accessMode: ReadWriteOnce
+
+externalDatabase:
+  # Used only when postgres.enabled=false. The target must have the `cube` and
+  # `earthdistance` extensions available (Supabase, RDS/Aurora, or a CNPG
+  # Cluster on this cluster).
+  #
+  # Provide the connection EITHER as a plain URL here, OR (preferred — keeps the
+  # password out of values/this chart's Secret) by pointing at an existing
+  # Secret that already holds a connection URL. CloudNativePG publishes exactly
+  # this: its `<cluster>-app` Secret has a ready-to-use `uri` key.
+  url: ""
+  existingSecret: ""          # e.g. "traffinator-db-app" (a CNPG app secret)
+  existingSecretKey: "uri"    # key in that secret holding the full DATABASE_URL
+
+# -----------------------------------------------------------------------------
+# Ingress (k3s ships Traefik as the default IngressClass)
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: traefik
+  host: traffinator.local
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: traffinator-tls
+
+service:
+  # ClusterIP for all internal services; ingress is the external entrypoint.
+  type: ClusterIP
+
+podSecurityContext: {}
+securityContext: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

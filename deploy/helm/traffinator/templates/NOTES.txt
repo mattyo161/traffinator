@@ -1,0 +1,37 @@
+Traffinator has been deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+1. Watch the pods come up (the backend waits for Postgres and runs migrations
+   on first start, which can take a minute):
+
+     kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }} -w
+
+{{ if .Values.ingress.enabled }}
+2. Open the app:
+
+     http://{{ .Values.ingress.host }}/
+
+   On k3s, point this hostname at your node. For a quick local test:
+     echo "<node-ip>  {{ .Values.ingress.host }}" | sudo tee -a /etc/hosts
+{{- else }}
+2. Ingress is disabled. Port-forward to reach the UI:
+
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "traffinator.frontend.fullname" . }} 8900:80
+     # then open http://localhost:8900/
+{{- end }}
+
+3. Google Maps API key:
+{{- if .Values.secrets.googleMapsApiKey }}
+   Provided via values — the app is ready to fetch live traffic.
+{{- else }}
+   Not set in values. Open the app and enter it on the first-launch setup
+   screen; it persists in the database{{ if .Values.postgres.persistence.enabled }} on the PVC{{ end }}.
+{{- end }}
+
+{{- if not .Values.secrets.existingSecret }}
+
+4. Generated credentials (Django secret key, Postgres password) are stored in
+   Secret "{{ include "traffinator.fullname" . }}" and preserved across
+   `helm upgrade`. To read the DB password:
+
+     kubectl -n {{ .Release.Namespace }} get secret {{ include "traffinator.fullname" . }} -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d
+{{- end }}
