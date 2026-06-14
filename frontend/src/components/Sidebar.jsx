@@ -42,22 +42,22 @@ export default function Sidebar({
         value={params.origin}
         onChange={(origin) => set({ origin })}
       />
-      <div className="flex justify-center">
-        <button
-          type="button"
-          onClick={() => set({ origin: params.destination, destination: params.origin })}
-          disabled={!params.origin && !params.destination}
-          title="Reverse commute (swap From and To)"
-          aria-label="Reverse commute (swap From and To)"
-          className="-my-1 flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-        >
-          <span aria-hidden="true">⇅</span> Reverse
-        </button>
-      </div>
       <LocationField
         label="To (destination)"
         value={params.destination}
         onChange={(destination) => set({ destination })}
+        labelAction={
+          <button
+            type="button"
+            onClick={() => set({ origin: params.destination, destination: params.origin })}
+            disabled={!params.origin && !params.destination}
+            title="Swap locations"
+            aria-label="Swap locations"
+            className="text-base leading-none text-slate-400 hover:text-slate-600 disabled:opacity-40"
+          >
+            <span aria-hidden="true">⇅</span>
+          </button>
+        }
       />
 
       <div>
