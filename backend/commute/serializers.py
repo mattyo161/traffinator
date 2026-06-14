@@ -1,11 +1,19 @@
 from rest_framework import serializers
 
+from commute.coords import round_coord
 from commute.models import SavedAddress, SavedRoute
 
 
 class CoordinateSerializer(serializers.Serializer):
     lat = serializers.FloatField(min_value=-90, max_value=90)
     lng = serializers.FloatField(min_value=-180, max_value=180)
+
+    def validate(self, data):
+        # Round on the way in so cache lookups and stored rows use a consistent
+        # precision regardless of how precise the geocoder was (issue #1).
+        data["lat"] = round_coord(data["lat"])
+        data["lng"] = round_coord(data["lng"])
+        return data
 
 
 class AnalyzeRequestSerializer(serializers.Serializer):
