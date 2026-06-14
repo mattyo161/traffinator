@@ -68,11 +68,32 @@ runs [semantic-release](https://semantic-release.gitbook.io/):
 
 ## Branches & pull requests
 
-- Work on a branch; open a PR into `main`.
+- **Always branch from an up-to-date `main`** so the branch's merge-base is
+  current — this keeps PR diffs minimal and avoids duplicate/divergent commits:
+  ```bash
+  git checkout main
+  git pull
+  git checkout -b <type>/<short-name>   # e.g. feat/saved-routes, fix/cache-count
+  # ...work + Conventional Commits...
+  git push -u origin <type>/<short-name>
+  ```
+- Open a PR into `main`. Keep it focused; the description explains what and why.
 - **AI agents (Claude) may create branches and PRs but MUST NOT merge a PR** —
   merging is always a human decision. Don't push directly to `main` (it's the
   protected default branch); changes land via PR.
-- Keep PRs focused; the PR description should explain what and why.
+
+### Merging — squash, with a Conventional Commits PR title
+
+- **Squash-merge** PRs, and make the **PR title** a valid Conventional Commit
+  (e.g. `feat: add saved routes`). The squash commit uses the PR title, so the
+  release-relevant type lands on `main` exactly once and individual
+  work-in-progress commit messages don't pollute history or the changelog.
+- This is what drives versioning: a non-conventional title (or a feature whose
+  commits aren't `feat:`) means **semantic-release won't cut a release**. If a
+  feature reaches `main` without a releasable Conventional Commit, record it
+  with an **empty `feat:`/`fix:` commit** (`git commit --allow-empty`) via a PR
+  and **merge that one with a merge commit** (squashing an empty commit yields
+  nothing to release).
 
 ## Local development & tests
 
