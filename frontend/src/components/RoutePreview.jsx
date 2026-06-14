@@ -9,11 +9,8 @@ import {
 } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { haversineKm, KM_TO_MILES } from '../utils/geo'
+import { haversineKm, KM_TO_MILES, MAX_COMMUTE_MILES } from '../utils/geo'
 import { api } from '../api'
-
-// Beyond this, the points almost certainly aren't a commute (wrong geocode?)
-const SUSPICIOUS_KM = 150
 
 function FitBounds({ bounds }) {
   const map = useMap()
@@ -76,7 +73,7 @@ export default function RoutePreview({ origin, destination }) {
           </span>
         )}
       </div>
-      {straightKm !== null && straightKm > SUSPICIOUS_KM && (
+      {straightKm !== null && straightKm * KM_TO_MILES > MAX_COMMUTE_MILES && (
         <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
           These points are {fmt(straightKm * KM_TO_MILES)} miles apart — that doesn't
           look like a commute. One of the addresses probably resolved to the wrong

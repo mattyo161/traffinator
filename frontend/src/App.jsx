@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
+import { isCommuteTooFar } from './utils/geo'
 import { useAuth } from './auth/AuthContext'
 import SetupWizard from './components/SetupWizard'
 import Sidebar from './components/Sidebar'
@@ -45,6 +46,12 @@ export default function App() {
     const perPoint = params.vector === 'arrival' ? 4 : 3
     return slots * params.days.length * perPoint
   }, [params])
+
+  // Implausible commute (likely a wrong geocode): flag the inputs and block Run.
+  const tooFar = useMemo(
+    () => isCommuteTooFar(params.origin, params.destination),
+    [params.origin, params.destination]
+  )
 
   async function runAnalysis() {
     setError(null)
@@ -99,6 +106,7 @@ export default function App() {
         onRun={runAnalysis}
         running={running}
         estimatedCalls={estimatedCalls}
+        tooFar={tooFar}
         onApplyRoute={applyRoute}
         onApplyAddress={applyAddress}
       />

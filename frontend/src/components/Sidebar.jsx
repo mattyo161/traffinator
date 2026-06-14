@@ -18,6 +18,7 @@ export default function Sidebar({
   onRun,
   running,
   estimatedCalls,
+  tooFar,
   onApplyRoute,
   onApplyAddress,
 }) {
@@ -31,7 +32,7 @@ export default function Sidebar({
   }
 
   const ready =
-    params.origin && params.destination && params.days.length > 0 && !running
+    params.origin && params.destination && params.days.length > 0 && !running && !tooFar
 
   return (
     <aside className="w-full shrink-0 space-y-5 border-b border-slate-200 bg-white p-4 shadow-sm lg:h-screen lg:w-80 lg:overflow-y-auto lg:border-b-0 lg:border-r">
@@ -41,11 +42,13 @@ export default function Sidebar({
         label="From (origin)"
         value={params.origin}
         onChange={(origin) => set({ origin })}
+        invalid={tooFar}
       />
       <LocationField
         label="To (destination)"
         value={params.destination}
         onChange={(destination) => set({ destination })}
+        invalid={tooFar}
         labelAction={
           <button
             type="button"
@@ -197,9 +200,15 @@ export default function Sidebar({
         >
           {running ? 'Analyzing…' : 'Run analysis'}
         </button>
-        <p className="text-center text-xs text-slate-500">
-          Up to {estimatedCalls} Google API calls — cache hits reduce this.
-        </p>
+        {tooFar ? (
+          <p className="text-center text-xs font-semibold text-red-600">
+            From and To are too far apart to be a commute — check the locations.
+          </p>
+        ) : (
+          <p className="text-center text-xs text-slate-500">
+            Up to {estimatedCalls} Google API calls — cache hits reduce this.
+          </p>
+        )}
       </div>
 
       <SavedPanel
