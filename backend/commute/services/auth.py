@@ -45,8 +45,18 @@ def verify_google_token(token):
             "last_name": info.get("family_name", "")[:150],
         },
     )
+    updates = []
+    # OAuth-only accounts must never have a usable password. get_or_create leaves
+    # a new user with an empty (and, per Django, "usable") password, so mark it
+    # unusable explicitly — this also backfills a pre-existing account on its
+    # next login.
+    if user.has_usable_password():
+        user.set_unusable_password()
+        updates.append("password")
     if not created and user.email != email:
         user.email = email
-        user.save(update_fields=["email"])
+        updates.append("email")
+    if updates:
+        user.save(update_fields=updates)
     logger.info("Google sign-in %s for %s", "created user" if created else "ok", email)
     return user

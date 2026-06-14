@@ -41,6 +41,23 @@ class GoogleLoginTests(TestCase):
             post_json(self.client, "/api/auth/google", {"credential": "fake"})
         self.assertEqual(User.objects.count(), 1)
 
+    def test_created_user_has_unusable_password(self):
+        with mock.patch.object(auth.id_token, "verify_oauth2_token", return_value=GOOGLE_INFO):
+            post_json(self.client, "/api/auth/google", {"credential": "fake"})
+        self.assertFalse(User.objects.get().has_usable_password())
+
+    def test_existing_usable_password_is_backfilled_to_unusable(self):
+        # A pre-existing google: account that somehow has a usable password gets
+        # marked unusable on its next OAuth login.
+        u = User.objects.create(username=f"google:{GOOGLE_INFO['sub']}")
+        u.set_password("hunter2")
+        u.save()
+        self.assertTrue(u.has_usable_password())
+        with mock.patch.object(auth.id_token, "verify_oauth2_token", return_value=GOOGLE_INFO):
+            post_json(self.client, "/api/auth/google", {"credential": "fake"})
+        u.refresh_from_db()
+        self.assertFalse(u.has_usable_password())
+
     def test_unverified_email_rejected(self):
         info = {**GOOGLE_INFO, "email_verified": False}
         with mock.patch.object(auth.id_token, "verify_oauth2_token", return_value=info):
