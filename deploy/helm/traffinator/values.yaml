@@ -34,9 +34,16 @@ backend:
       memory: 256Mi
     limits:
       memory: 512Mi
+  # Non-secret env (rendered into a ConfigMap). Add keys here freely.
   env:
     DJANGO_DEBUG: "0"
     ANALYSIS_MAX_WORKERS: "8"
+    # Rate limits protecting the paid Google endpoints (see commute.throttles).
+    THROTTLE_ANALYZE_ANON: "5/hour"
+    THROTTLE_ANALYZE_USER: "60/hour"
+    THROTTLE_LOOKUP_ANON: "30/hour"
+    THROTTLE_LOOKUP_USER: "120/hour"
+    THROTTLE_GOOGLE_GLOBAL: "2000/day"
 
 frontend:
   image:

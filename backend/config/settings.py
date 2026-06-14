@@ -43,15 +43,37 @@ DATABASES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Shared cache used by DRF throttling. DatabaseCache keeps throttle counters
+# consistent across gunicorn workers and backend pods using the existing
+# Postgres — no extra infra — so per-client limits and the global cap actually
+# hold under concurrency. Swap for Redis (django-redis) for higher throughput.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "commute_cache",
+    }
+}
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
     ],
     # Endpoints are public by default (demo mode); saved-data views opt in to
-    # IsAuthenticated explicitly.
+    # IsAuthenticated explicitly. The paid Google-backed endpoints (analyze /
+    # route / geocode) stay public but are rate-limited (see commute.throttles).
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "UNAUTHENTICATED_USER": None,
+    # Rate limits (env-configurable). analyze is heaviest (many Google calls per
+    # request); route+geocode share the lighter "lookup" budget; google_global
+    # is a coarse cross-client daily circuit-breaker on total billable traffic.
+    "DEFAULT_THROTTLE_RATES": {
+        "analyze_anon": os.environ.get("THROTTLE_ANALYZE_ANON", "5/hour"),
+        "analyze_user": os.environ.get("THROTTLE_ANALYZE_USER", "60/hour"),
+        "lookup_anon": os.environ.get("THROTTLE_LOOKUP_ANON", "30/hour"),
+        "lookup_user": os.environ.get("THROTTLE_LOOKUP_USER", "120/hour"),
+        "google_global": os.environ.get("THROTTLE_GOOGLE_GLOBAL", "2000/day"),
+    },
 }
 
 # Google OAuth: the SPA obtains an ID token via Google Identity Services and

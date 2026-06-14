@@ -21,11 +21,16 @@ async function request(path, options = {}) {
     /* non-JSON or empty body */
   }
   if (!res.ok) {
+    // 429 (and other DRF errors) carry a human message in `detail`.
+    const rateLimited = res.status === 429
     const message =
       body?.error ||
+      body?.detail ||
       (body && typeof body === 'object' ? JSON.stringify(body) : null) ||
       `Request failed (${res.status})`
-    const err = new Error(message)
+    const err = new Error(
+      rateLimited ? `Rate limit reached — ${message}` : message
+    )
     err.status = res.status
     throw err
   }
