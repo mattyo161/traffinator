@@ -33,12 +33,26 @@ spec:
         - CREATE EXTENSION IF NOT EXISTS cube;
         - CREATE EXTENSION IF NOT EXISTS earthdistance;
         - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+        {{- if .Values.postgres.cnpg.pgaudit.enabled }}
+        - CREATE EXTENSION IF NOT EXISTS pgaudit;
+        {{- end }}
   postgresql:
     shared_preload_libraries:
       - pg_stat_statements
-    {{- with .Values.postgres.cnpg.parameters }}
+      {{- if .Values.postgres.cnpg.pgaudit.enabled }}
+      - pgaudit
+      {{- end }}
+    {{- if or .Values.postgres.cnpg.pgaudit.enabled .Values.postgres.cnpg.parameters }}
     parameters:
+      {{- if .Values.postgres.cnpg.pgaudit.enabled }}
+      # pgAudit: records are written to the Postgres log (stdout) and shipped by
+      # the cluster's log pipeline (Vector -> Loki/BetterStack on the homelab).
+      pgaudit.log: {{ .Values.postgres.cnpg.pgaudit.log | quote }}
+      pgaudit.log_catalog: {{ ternary "on" "off" .Values.postgres.cnpg.pgaudit.logCatalog | quote }}
+      {{- end }}
+      {{- with .Values.postgres.cnpg.parameters }}
       {{- toYaml . | nindent 6 }}
+      {{- end }}
     {{- end }}
   {{- if .Values.postgres.cnpg.monitoring.enablePodMonitor }}
   monitoring:
