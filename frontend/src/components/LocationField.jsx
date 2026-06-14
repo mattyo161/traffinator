@@ -7,7 +7,7 @@ const COORD_RE = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/
 // (e.g. "en-US" -> "us"), so "3 hampshire st" prefers nearby matches.
 const REGION = (navigator.language?.split('-')[1] || '').toLowerCase()
 
-export default function LocationField({ label, value, onChange, labelAction, invalid }) {
+export default function LocationField({ label, value, onChange, labelAction, invalid, name }) {
   const [query, setQuery] = useState(value?.label ?? '')
   const [candidates, setCandidates] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -87,12 +87,21 @@ export default function LocationField({ label, value, onChange, labelAction, inv
   return (
     <div className="relative">
       <div className="mb-1 flex items-center justify-between">
-        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <label
+          htmlFor={name}
+          className="block text-xs font-semibold uppercase tracking-wide text-slate-500"
+        >
           {label}
         </label>
         {labelAction}
       </div>
+      {/* Distinct name/id + a section-scoped address token so password managers
+          (1Password) and the browser treat From and To as separate address
+          fields rather than filling only the first. */}
       <input
+        id={name}
+        name={name}
+        autoComplete={name ? `section-${name} street-address` : 'off'}
         value={query}
         onChange={onInput}
         onKeyDown={onKeyDown}
