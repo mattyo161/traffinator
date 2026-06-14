@@ -40,12 +40,14 @@ export default function Sidebar({
 
       <LocationField
         label="From (origin)"
+        name="origin"
         value={params.origin}
         onChange={(origin) => set({ origin })}
         invalid={tooFar}
       />
       <LocationField
         label="To (destination)"
+        name="destination"
         value={params.destination}
         onChange={(destination) => set({ destination })}
         invalid={tooFar}
