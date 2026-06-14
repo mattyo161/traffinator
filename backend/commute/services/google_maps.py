@@ -9,6 +9,7 @@ import os
 
 import requests
 
+from commute.coords import round_coord
 from commute.models import Setting
 
 logger = logging.getLogger("commute.google")
@@ -86,8 +87,8 @@ def geocode(query, region=None):
         raise GoogleMapsError(data.get("error_message") or f"Geocoding failed (status={status}).")
     return [
         {
-            "lat": r["geometry"]["location"]["lat"],
-            "lng": r["geometry"]["location"]["lng"],
+            "lat": round_coord(r["geometry"]["location"]["lat"]),
+            "lng": round_coord(r["geometry"]["location"]["lng"]),
             "address": r["formatted_address"],
         }
         for r in data["results"][:5]

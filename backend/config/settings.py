@@ -43,6 +43,10 @@ DATABASES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Decimals to round stored lat/lng to (≈6 ≈ a few feet). Keeps the cache clean
+# and dedupes near-identical geocoder results. See commute/coords.py.
+COORDINATE_PRECISION = int(os.environ.get("COORDINATE_PRECISION", "6"))
+
 # Shared cache used by DRF throttling. DatabaseCache keeps throttle counters
 # consistent across gunicorn workers and backend pods using the existing
 # Postgres — no extra infra — so per-client limits and the global cap actually
