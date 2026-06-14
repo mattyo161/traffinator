@@ -10,3 +10,13 @@ export function haversineKm(a, b) {
 }
 
 export const KM_TO_MILES = 0.621371
+
+// Straight-line distance beyond which two points are implausible as a commute
+// (almost always a wrong geocode).
+export const MAX_COMMUTE_MILES = 100
+
+// True only when both points are set AND they're too far apart to be a commute.
+export function isCommuteTooFar(origin, destination) {
+  if (!origin || !destination) return false
+  return haversineKm(origin, destination) * KM_TO_MILES > MAX_COMMUTE_MILES
+}

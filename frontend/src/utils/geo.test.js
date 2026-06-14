@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { haversineKm } from './geo'
+import { haversineKm, isCommuteTooFar } from './geo'
 
 const BOSTON = { lat: 42.3601, lng: -71.0589 }
 const NYC = { lat: 40.7128, lng: -74.006 }
@@ -25,7 +25,26 @@ describe('haversineKm', () => {
   it('flags the Australia-to-Boston mixup as far beyond any commute', () => {
     // The geocoding bug that motivated the route-preview warning
     const d = haversineKm(MELBOURNE_SUBURB, NEWTON_MA)
-    expect(d).toBeGreaterThan(150) // SUSPICIOUS_KM threshold
     expect(d).toBeGreaterThan(16000)
+  })
+})
+
+describe('isCommuteTooFar', () => {
+  it('is false when either endpoint is missing', () => {
+    expect(isCommuteTooFar(null, NEWTON_MA)).toBe(false)
+    expect(isCommuteTooFar(BOSTON, null)).toBe(false)
+    expect(isCommuteTooFar(null, null)).toBe(false)
+  })
+
+  it('is false for a plausible local commute (Boston <-> Newton)', () => {
+    expect(isCommuteTooFar(BOSTON, NEWTON_MA)).toBe(false)
+  })
+
+  it('is true for clearly-too-far points (Boston <-> NYC, ~300km)', () => {
+    expect(isCommuteTooFar(BOSTON, NYC)).toBe(true)
+  })
+
+  it('is true for the Australia-to-Boston geocode mixup', () => {
+    expect(isCommuteTooFar(MELBOURNE_SUBURB, NEWTON_MA)).toBe(true)
   })
 })

@@ -7,7 +7,7 @@ const COORD_RE = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/
 // (e.g. "en-US" -> "us"), so "3 hampshire st" prefers nearby matches.
 const REGION = (navigator.language?.split('-')[1] || '').toLowerCase()
 
-export default function LocationField({ label, value, onChange, labelAction }) {
+export default function LocationField({ label, value, onChange, labelAction, invalid }) {
   const [query, setQuery] = useState(value?.label ?? '')
   const [candidates, setCandidates] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -99,9 +99,11 @@ export default function LocationField({ label, value, onChange, labelAction }) {
         onBlur={() => setTimeout(() => setCandidates(null), 200)}
         placeholder="Address or lat,lng"
         className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${
-          value
-            ? 'border-emerald-400 focus:border-emerald-500'
-            : 'border-slate-300 focus:border-blue-500'
+          invalid && value
+            ? 'border-red-400 focus:border-red-500'
+            : value
+              ? 'border-emerald-400 focus:border-emerald-500'
+              : 'border-slate-300 focus:border-blue-500'
         }`}
       />
       {busy && (
@@ -127,8 +129,13 @@ export default function LocationField({ label, value, onChange, labelAction }) {
       )}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
       {value ? (
-        <p className="mt-1 text-xs text-emerald-700" title={value.label}>
-          ✓ {value.lat.toFixed(5)}, {value.lng.toFixed(5)}
+        <p
+          className={`mt-1 text-xs ${
+            invalid ? 'font-bold text-red-600' : 'text-emerald-700'
+          }`}
+          title={value.label}
+        >
+          {invalid ? '⚠' : '✓'} {value.lat.toFixed(5)}, {value.lng.toFixed(5)}
         </p>
       ) : (
         query.trim().length >= 4 &&
