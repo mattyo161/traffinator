@@ -104,6 +104,13 @@ postgres:
       enabled: false
       log: "write,ddl,role"      # audited statement classes (pgaudit.log)
       logCatalog: false          # pgaudit.log_catalog (off avoids noisy catalog reads)
+    # WAL archiving + base backups via the Barman Cloud Plugin (enables PITR).
+    # This only wires the plugin onto the Cluster; the ObjectStore,
+    # ScheduledBackup, and off-site copy are managed outside the chart (homelab).
+    # Requires an existing barmancloud.cnpg.io/ObjectStore named below.
+    backup:
+      enabled: false
+      objectStoreName: ""        # name of the ObjectStore to archive WAL/backups to
     parameters: {}               # extra postgresql.conf parameters
     resources:
       requests:

@@ -22,6 +22,18 @@ spec:
   {{- if .Values.postgres.cnpg.superuserAccess }}
   enableSuperuserAccess: true
   {{- end }}
+  {{- if .Values.postgres.cnpg.backup.enabled }}
+  {{- if not .Values.postgres.cnpg.backup.objectStoreName }}
+  {{- fail "postgres.cnpg.backup.enabled requires postgres.cnpg.backup.objectStoreName (the barmancloud.cnpg.io/ObjectStore name)" }}
+  {{- end }}
+  # WAL archiving for PITR via the Barman Cloud Plugin. The referenced
+  # ObjectStore (+ ScheduledBackup, off-site copy) are managed outside the chart.
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: {{ .Values.postgres.cnpg.backup.objectStoreName | quote }}
+  {{- end }}
   bootstrap:
     initdb:
       database: {{ .Values.postgres.database }}
