@@ -19,7 +19,9 @@ contrib modules we use (`cube`, `earthdistance`). No custom image to maintain.
 
 Helper scripts live in [`scripts/`](scripts/): `db-env.sh` (shared, CNPG-aware),
 `db-dump.sh`, `db-restore-to-schema.sh`. For the table/column reference and ER
-diagrams, see [../database-schema.md](../database-schema.md).
+diagrams, see [../database-schema.md](../database-schema.md). To connect from a
+desktop client (DBeaver/psql), see
+[postgres-external-access.md](postgres-external-access.md).
 
 ---
 
