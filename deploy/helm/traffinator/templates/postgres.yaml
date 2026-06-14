@@ -1,6 +1,6 @@
-{{- if .Values.postgres.enabled -}}
+{{- if eq .Values.postgres.mode "bundled" -}}
 {{- $pg := include "traffinator.postgres.fullname" . -}}
-{{- if .Values.postgres.persistence.enabled }}
+{{- if .Values.postgres.bundled.persistence.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -10,12 +10,12 @@ metadata:
     app.kubernetes.io/component: postgres
 spec:
   accessModes:
-    - {{ .Values.postgres.persistence.accessMode }}
+    - {{ .Values.postgres.bundled.persistence.accessMode }}
   resources:
     requests:
-      storage: {{ .Values.postgres.persistence.size }}
-  {{- if .Values.postgres.persistence.storageClass }}
-  storageClassName: {{ .Values.postgres.persistence.storageClass }}
+      storage: {{ .Values.postgres.bundled.persistence.size }}
+  {{- if .Values.postgres.bundled.persistence.storageClass }}
+  storageClassName: {{ .Values.postgres.bundled.persistence.storageClass }}
   {{- end }}
 ---
 {{- end }}
@@ -65,7 +65,7 @@ spec:
       {{- end }}
       containers:
         - name: postgres
-          image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          image: "{{ .Values.postgres.bundled.image.repository }}:{{ .Values.postgres.bundled.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: postgres
@@ -94,13 +94,13 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 20
           resources:
-            {{- toYaml .Values.postgres.resources | nindent 12 }}
+            {{- toYaml .Values.postgres.bundled.resources | nindent 12 }}
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
       volumes:
         - name: data
-        {{- if .Values.postgres.persistence.enabled }}
+        {{- if .Values.postgres.bundled.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ $pg }}
         {{- else }}

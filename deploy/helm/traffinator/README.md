@@ -73,6 +73,16 @@ docker save traffinator-backend:dev | sudo k3s ctr images import -   # repeat pe
 > `ghcr.io/mattyo161/traffinator-{backend,frontend}` — then deploy. For a quick
 > pre-merge test, use the local build+import fallback in §1.
 
+> **Database prerequisite:** the chart defaults to `postgres.mode=cnpg`, which
+> creates a CloudNativePG `Cluster` and therefore needs the **CNPG operator**
+> installed in the cluster first:
+> ```bash
+> helm repo add cnpg https://cloudnative-pg.github.io/charts
+> helm upgrade --install cnpg cnpg/cloudnative-pg -n cnpg-system --create-namespace
+> ```
+> No operator? Use `postgres.mode=bundled` (a simple in-chart Postgres
+> Deployment + PVC) or `postgres.mode=external` — see *Database modes* below.
+
 ### Homelab (mattyo161/homelab)
 A ready overlay is provided — Longhorn storage + Traefik/cert-manager under
 `*.oue.home`:
@@ -106,19 +116,48 @@ secrets:
 Then point the hostname at your node (e.g. add the host to your router's DNS, or
 `/etc/hosts` for a quick test).
 
-### Using a CloudNativePG database instead of the bundled Postgres
-Once the CNPG operator + a `Cluster` (e.g. `traffinator-db`) exist (see
-[../../docs/runbooks/postgres-operations.md](../../docs/runbooks/postgres-operations.md)),
-switch the app to it — no password in chart values, pulled from the CNPG app
-secret's `uri` key:
+### Database modes (`postgres.mode`)
 
+The chart provisions Postgres one of three ways:
+
+**`cnpg` (default)** — a CloudNativePG `Cluster` (HA, backups, metrics; operand
+images bundle pgaudit/pg_stat_statements/contrib). Requires the operator
+(prerequisite above). The chart pre-creates the `cube`/`earthdistance`/
+`pg_stat_statements` extensions at bootstrap (so the app role needs no
+elevation), and the backend reads `DATABASE_URL` from the CNPG `<release>-postgres-app`
+Secret's `uri` key — no DB password ever lands in chart values. Tunables:
 ```yaml
 postgres:
-  enabled: false
-externalDatabase:
-  existingSecret: traffinator-db-app
-  existingSecretKey: uri
+  mode: cnpg
+  cnpg:
+    instances: 2                  # HA
+    storage: { size: 5Gi, storageClass: longhorn }
+    monitoring: { enablePodMonitor: true }   # with kube-prometheus-stack
+    superuserAccess: false        # true for admin ops (e.g. schema-remap restores)
 ```
+See [../../docs/runbooks/postgres-operations.md](../../docs/runbooks/postgres-operations.md)
+for day-2 operations (backups, restores, replication, metrics).
+
+**`bundled`** — a simple in-chart Postgres `Deployment` + PVC. No operator
+needed; good for a quick start or clusters without CNPG:
+```yaml
+postgres:
+  mode: bundled
+  bundled:
+    persistence: { enabled: true, storageClass: longhorn, size: 5Gi }
+```
+
+**`external`** — bring your own database (Supabase / RDS / Aurora / an existing
+CNPG cluster). Provide a URL, or (preferred) point at an existing Secret:
+```yaml
+postgres:
+  mode: external
+externalDatabase:
+  existingSecret: my-db-app       # e.g. a CNPG <cluster>-app secret
+  existingSecretKey: uri
+  # or: url: "postgresql://user:pass@host:5432/db"
+```
+The target must have `cube` and `earthdistance` available.
 
 ## 3. Upgrade / uninstall
 
@@ -204,35 +243,40 @@ credentials + `enableOCI: true`.)
 | `imagePullSecrets` | `[]` | `[{name: ghcr}]` if GHCR packages are private |
 | `ingress.enabled` / `.host` / `.className` | `true` / `traffinator.local` / `traefik` | |
 | `ingress.tls.enabled` / `.secretName` | `false` / `traffinator-tls` | Bring your own cert secret |
-| `postgres.enabled` | `true` | Set `false` for external/CNPG (see below) |
-| `postgres.persistence.size` | `5Gi` | |
-| `postgres.persistence.storageClass` | `""` | `""` = cluster default; set `longhorn` on the homelab |
-| `externalDatabase.url` | `""` | Plain connection URL when `postgres.enabled=false` |
-| `externalDatabase.existingSecret` / `.existingSecretKey` | `""` / `uri` | Pull `DATABASE_URL` from an existing secret (e.g. a CNPG `<cluster>-app` secret) — keeps the password out of chart values |
+| `postgres.mode` | `cnpg` | `cnpg` \| `bundled` \| `external` (see *Database modes*) |
+| `postgres.cnpg.instances` | `2` | HA replica count (cnpg mode) |
+| `postgres.cnpg.storage.{size,storageClass}` | `5Gi` / `""` | cnpg mode; set `longhorn` on the homelab |
+| `postgres.cnpg.monitoring.enablePodMonitor` | `false` | DB metrics via kube-prometheus-stack |
+| `postgres.cnpg.superuserAccess` | `false` | Create the `<cluster>-superuser` secret for admin ops |
+| `postgres.bundled.persistence.{size,storageClass}` | `5Gi` / `""` | bundled mode |
+| `externalDatabase.url` | `""` | external mode: plain connection URL |
+| `externalDatabase.existingSecret` / `.existingSecretKey` | `""` / `uri` | external mode: pull `DATABASE_URL` from an existing secret (e.g. a CNPG `<cluster>-app` secret) |
 | `secrets.googleMapsApiKey` | `""` | Blank → configure via in-app setup screen |
 | `secrets.googleOauthClientId` | `""` | Enables Google sign-in; also served to the SPA |
 | `secrets.openRouteServiceApiKey` | `""` | Blank → routing falls back to public OSRM |
-| `secrets.djangoSecretKey` / `postgres.password` | `""` | Blank → generated and **preserved across upgrades** |
+| `secrets.djangoSecretKey` / `postgres.bundled.password` | `""` | Blank → generated and **preserved across upgrades** |
 | `secrets.existingSecret` | `""` | Manage all credentials in your own Secret instead |
 
 ## Notes
 
-- **Generated credentials persist across upgrades.** With `djangoSecretKey` and
-  `postgres.password` left blank, the chart generates them on first install and
-  re-reads them from the live Secret on subsequent upgrades (so the DB password
-  never drifts away from the data on the PVC). This relies on `helm`'s `lookup`,
-  which is empty under `helm template`/`--dry-run` — those render fresh randoms
-  and are for inspection only, not installs.
+- **Generated credentials persist across upgrades.** In `bundled` mode, with
+  `djangoSecretKey` and `postgres.bundled.password` left blank, the chart
+  generates them on first install and re-reads them from the live Secret on
+  upgrades (so the DB password never drifts away from the data on the PVC). This
+  relies on `helm`'s `lookup`, which is empty under `helm template`/`--dry-run`
+  — those render fresh randoms, for inspection only. In `cnpg` mode the operator
+  owns the DB credentials (`<release>-postgres-app` Secret).
 - **Migrations** run from the backend entrypoint on pod start. Keep
   `backend.replicas: 1` unless you move `migrate` into a dedicated Job.
-- **External Postgres** must have the `cube` and `earthdistance` extensions
-  available (the app's migration runs `CREATE EXTENSION`).
+- **Extensions:** `cnpg` mode pre-creates `cube`/`earthdistance` at bootstrap.
+  In `bundled`/`external` mode the app's migration runs `CREATE EXTENSION` (the
+  bundled superuser handles it; an external DB must allow these extensions).
 
 ## External Postgres example
 
 ```yaml
 postgres:
-  enabled: false
+  mode: external
 externalDatabase:
   url: "postgresql://postgres:PASS@db.PROJECT.supabase.co:5432/postgres"
 ```

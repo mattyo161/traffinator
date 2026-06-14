@@ -24,7 +24,7 @@ Traffinator has been deployed as release "{{ .Release.Name }}" in namespace "{{ 
    Provided via values — the app is ready to fetch live traffic.
 {{- else }}
    Not set in values. Open the app and enter it on the first-launch setup
-   screen; it persists in the database{{ if .Values.postgres.persistence.enabled }} on the PVC{{ end }}.
+   screen; it persists in the database (survives restarts via the DB's storage).
 {{- end }}
 
 {{- if not .Values.secrets.existingSecret }}

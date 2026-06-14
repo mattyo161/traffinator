@@ -1,0 +1,51 @@
+{{- if eq .Values.postgres.mode "cnpg" -}}
+{{- /* CloudNativePG Cluster. Requires the CNPG operator/CRDs in the cluster.
+       Creates services <cluster>-rw/-ro/-r and a <cluster>-app Secret whose
+       `uri` key the backend consumes (see backend.yaml). */ -}}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "traffinator.postgres.fullname" . }}
+  labels:
+    {{- include "traffinator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  instances: {{ .Values.postgres.cnpg.instances }}
+  {{- with .Values.postgres.cnpg.imageName }}
+  imageName: {{ . }}
+  {{- end }}
+  storage:
+    size: {{ .Values.postgres.cnpg.storage.size }}
+    {{- with .Values.postgres.cnpg.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+  {{- if .Values.postgres.cnpg.superuserAccess }}
+  enableSuperuserAccess: true
+  {{- end }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database }}
+      owner: {{ .Values.postgres.username }}
+      # Pre-create non-trusted extensions as superuser at bootstrap, so the app
+      # role never needs elevation and Django's `CREATE EXTENSION IF NOT EXISTS`
+      # migration is a no-op.
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS cube;
+        - CREATE EXTENSION IF NOT EXISTS earthdistance;
+        - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+  postgresql:
+    shared_preload_libraries:
+      - pg_stat_statements
+    {{- with .Values.postgres.cnpg.parameters }}
+    parameters:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- if .Values.postgres.cnpg.monitoring.enablePodMonitor }}
+  monitoring:
+    enablePodMonitor: true
+  {{- end }}
+  {{- with .Values.postgres.cnpg.resources }}
+  resources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end -}}
