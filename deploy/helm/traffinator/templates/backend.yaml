@@ -63,9 +63,17 @@ spec:
                 name: {{ $be }}-env
             - secretRef:
                 name: {{ include "traffinator.secretName" . }}
-          {{- if .Values.externalDatabase.existingSecret }}
-          # DATABASE_URL pulled from an external secret (e.g. a CNPG app
-          # secret); this env entry overrides any value from envFrom above.
+          {{- if eq .Values.postgres.mode "cnpg" }}
+          # DATABASE_URL from the CloudNativePG <cluster>-app Secret's `uri`
+          # (overrides anything from envFrom above).
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "traffinator.postgres.fullname" . }}-app
+                  key: uri
+          {{- else if and (eq .Values.postgres.mode "external") .Values.externalDatabase.existingSecret }}
+          # DATABASE_URL pulled from a user-provided external Secret.
           env:
             - name: DATABASE_URL
               valueFrom:

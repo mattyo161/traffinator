@@ -28,21 +28,22 @@ ingress:
     secretName: traffinator-tls
 
 # --- Database -----------------------------------------------------------------
-# Default here: the chart's bundled Postgres on Longhorn — deployable today.
+# CloudNativePG (chart default). Requires the CNPG operator installed in the
+# cluster (ArgoCD/operator session). Storage on Longhorn; DB metrics into the
+# existing kube-prometheus-stack via a PodMonitor.
 postgres:
-  enabled: true
-  persistence:
-    enabled: true
-    storageClass: longhorn
-    size: 5Gi
+  mode: cnpg
+  cnpg:
+    instances: 2
+    storage:
+      size: 5Gi
+      storageClass: longhorn
+    monitoring:
+      enablePodMonitor: true
+    # superuserAccess: true   # enable if you need admin ops (e.g. schema-remap restores)
 
-# --- CNPG alternative (preferred target; enable once the operator is installed)
-# Deploy a CloudNativePG Cluster named `traffinator-db` separately (ArgoCD
-# session), then switch the app to it by disabling the bundled Postgres and
-# pointing DATABASE_URL at the CNPG app secret's `uri` key:
-#
+# No operator yet? Fall back to the in-chart Postgres on Longhorn:
 # postgres:
-#   enabled: false
-# externalDatabase:
-#   existingSecret: traffinator-db-app
-#   existingSecretKey: uri
+#   mode: bundled
+#   bundled:
+#     persistence: { enabled: true, storageClass: longhorn, size: 5Gi }

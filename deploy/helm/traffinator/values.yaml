@@ -74,41 +74,66 @@ secrets:
   djangoSecretKey: ""       # blank -> generated & preserved across upgrades
 
 # -----------------------------------------------------------------------------
-# Bundled PostgreSQL (with cube/earthdistance, created by app migrations).
-# Set postgres.enabled=false and externalDatabase.url to use Supabase/external.
+# PostgreSQL — choose a provider with postgres.mode (cnpg | bundled | external).
 # -----------------------------------------------------------------------------
 postgres:
-  enabled: true
-  image:
-    repository: postgres
-    tag: "16-alpine"
+  # Database provider:
+  #   cnpg     - CloudNativePG operator Cluster (DEFAULT). Idiomatic on k8s:
+  #              HA, backups, metrics, and operand images that already bundle
+  #              pgaudit/pg_stat_statements/contrib. REQUIRES the CNPG operator
+  #              to be installed in the cluster (see chart README).
+  #   bundled  - simple in-chart Postgres Deployment + PVC (no operator needed).
+  #   external - bring your own DATABASE_URL (Supabase / RDS / Aurora / ...).
+  mode: cnpg
   database: commute
   username: commute
-  password: ""              # blank -> generated & preserved across upgrades
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      memory: 512Mi
-  persistence:
-    enabled: true
-    size: 5Gi
-    storageClass: ""        # "" uses the cluster default (local-path on k3s)
-    accessMode: ReadWriteOnce
 
+  # --- mode: cnpg --------------------------------------------------------------
+  cnpg:
+    instances: 2                 # 1 = single, 2+ = HA with streaming replicas
+    imageName: ""                # optional: pin a CNPG operand image
+    storage:
+      size: 5Gi
+      storageClass: ""           # "" = cluster default; set e.g. longhorn
+    superuserAccess: false       # creates <cluster>-superuser secret (ops use)
+    monitoring:
+      enablePodMonitor: false    # true with kube-prometheus-stack for DB metrics
+    parameters: {}               # extra postgresql.conf parameters
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+
+  # --- mode: bundled -----------------------------------------------------------
+  bundled:
+    image:
+      repository: postgres
+      tag: "16-alpine"
+    password: ""                 # blank -> generated & preserved across upgrades
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: ""           # "" = cluster default (local-path on k3s)
+      accessMode: ReadWriteOnce
+
+# --- mode: external ------------------------------------------------------------
 externalDatabase:
-  # Used only when postgres.enabled=false. The target must have the `cube` and
-  # `earthdistance` extensions available (Supabase, RDS/Aurora, or a CNPG
-  # Cluster on this cluster).
-  #
+  # The target must have the `cube` and `earthdistance` extensions available.
   # Provide the connection EITHER as a plain URL here, OR (preferred — keeps the
   # password out of values/this chart's Secret) by pointing at an existing
-  # Secret that already holds a connection URL. CloudNativePG publishes exactly
-  # this: its `<cluster>-app` Secret has a ready-to-use `uri` key.
+  # Secret that already holds a connection URL (e.g. a CNPG `<cluster>-app`
+  # Secret's `uri` key).
   url: ""
-  existingSecret: ""          # e.g. "traffinator-db-app" (a CNPG app secret)
-  existingSecretKey: "uri"    # key in that secret holding the full DATABASE_URL
+  existingSecret: ""
+  existingSecretKey: "uri"
 
 # -----------------------------------------------------------------------------
 # Ingress (k3s ships Traefik as the default IngressClass)
