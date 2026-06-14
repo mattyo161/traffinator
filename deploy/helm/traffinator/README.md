@@ -248,6 +248,8 @@ credentials + `enableOCI: true`.)
 | `postgres.cnpg.storage.{size,storageClass}` | `5Gi` / `""` | cnpg mode; set `longhorn` on the homelab |
 | `postgres.cnpg.monitoring.enablePodMonitor` | `false` | DB metrics via kube-prometheus-stack |
 | `postgres.cnpg.superuserAccess` | `false` | Create the `<cluster>-superuser` secret for admin ops |
+| `postgres.cnpg.pgaudit.enabled` | `false` | Enable pgAudit (adds `pgaudit` to `shared_preload_libraries`, creates the extension, sets audit params) |
+| `postgres.cnpg.pgaudit.log` / `.logCatalog` | `write,ddl,role` / `false` | `pgaudit.log` classes and `pgaudit.log_catalog` |
 | `postgres.bundled.persistence.{size,storageClass}` | `5Gi` / `""` | bundled mode |
 | `externalDatabase.url` | `""` | external mode: plain connection URL |
 | `externalDatabase.existingSecret` / `.existingSecretKey` | `""` / `uri` | external mode: pull `DATABASE_URL` from an existing secret (e.g. a CNPG `<cluster>-app` secret) |

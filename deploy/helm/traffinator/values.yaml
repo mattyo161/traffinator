@@ -98,6 +98,12 @@ postgres:
     superuserAccess: false       # creates <cluster>-superuser secret (ops use)
     monitoring:
       enablePodMonitor: false    # true with kube-prometheus-stack for DB metrics
+    # pgAudit session auditing. Records go to the Postgres log (stdout) and ride
+    # the cluster's log pipeline (Vector -> Loki/BetterStack on the homelab).
+    pgaudit:
+      enabled: false
+      log: "write,ddl,role"      # audited statement classes (pgaudit.log)
+      logCatalog: false          # pgaudit.log_catalog (off avoids noisy catalog reads)
     parameters: {}               # extra postgresql.conf parameters
     resources:
       requests:
