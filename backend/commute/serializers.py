@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from commute.models import SavedAddress, SavedRoute
+
 
 class CoordinateSerializer(serializers.Serializer):
     lat = serializers.FloatField(min_value=-90, max_value=90)
@@ -27,6 +29,11 @@ class AnalyzeRequestSerializer(serializers.Serializer):
         return data
 
 
+class RouteRequestSerializer(serializers.Serializer):
+    origin = CoordinateSerializer()
+    destination = CoordinateSerializer()
+
+
 class GeocodeRequestSerializer(serializers.Serializer):
     query = serializers.CharField(max_length=500)
     region = serializers.CharField(required=False, allow_blank=True, max_length=8, default="")
@@ -34,3 +41,25 @@ class GeocodeRequestSerializer(serializers.Serializer):
 
 class SetupRequestSerializer(serializers.Serializer):
     api_key = serializers.CharField(max_length=200)
+
+
+class GoogleAuthSerializer(serializers.Serializer):
+    credential = serializers.CharField()
+
+
+class SavedAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavedAddress
+        fields = ["id", "label", "address", "lat", "lng", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
+class SavedRouteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavedRoute
+        fields = [
+            "id", "name", "origin_label", "origin_lat", "origin_lng",
+            "dest_label", "dest_lat", "dest_lng", "params",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]

@@ -116,19 +116,67 @@ to the `commute_trafficsample` table.
 Response: per-day arrays of `{time, min_s, typical_s, max_s, cached}` plus
 `meta` with cache-hit and API-call counts.
 
-Other endpoints: `GET /api/setup/status`, `POST /api/setup` (`{"api_key": …}`),
-`POST /api/geocode` (`{"query": "address", "region": "us"}` → up to 5
-candidates in `{"results": [{lat, lng, address}]}`; `region` is an optional
-ccTLD bias the UI derives from the browser locale).
+Other endpoints:
+- `GET /api/config` — runtime config for the SPA (maps configured? Google OAuth
+  client id, Apple enabled?).
+- `GET /api/setup/status`, `POST /api/setup` (`{"api_key": …}`).
+- `POST /api/geocode` (`{"query": "address", "region": "us"}` → up to 5
+  candidates in `{"results": [{lat, lng, address}]}`; `region` is an optional
+  ccTLD bias the UI derives from the browser locale).
+- `POST /api/route` (`{"origin": {lat,lng}, "destination": {lat,lng}}` →
+  `{"geometry": [[lat,lng], …], "distance_m", "provider", "cached"}`).
+- `POST /api/auth/google` (`{"credential": "<google id token>"}` → `{token, user}`),
+  `GET /api/auth/me`, `POST /api/auth/logout`.
+- `GET/POST/DELETE /api/saved-routes/` and `/api/saved-addresses/` — require
+  `Authorization: Token …`; scoped to the signed-in user.
 
 ## Using the app
 
 - **From / To** — type an address and pick the right match from the typeahead
   dropdown (results are biased toward your browser's region but must be
   explicitly confirmed), or paste raw `lat,lng` coordinates directly.
-- **Route preview** — once a point is confirmed, a map (OpenStreetMap tiles,
-  no extra API key) shows both points and the straight-line distance, with a
-  warning if the points are too far apart to plausibly be a commute.
+- **Reverse commute** — the ⇅ button between From and To swaps them, for
+  analyzing the return trip.
+- **Route preview** — once both points are confirmed, a map (OpenStreetMap
+  tiles) draws the actual **road route** and shows the driving distance, with a
+  warning if the points are too far apart to plausibly be a commute. Route
+  geometry is fetched from a free routing provider and cached in Postgres.
+- **Accounts (optional)** — sign in with Google (top-right) to **save commutes
+  and places**. Saved commutes restore the full route + parameters in one
+  click; saved places drop into From/To. The app works fully without an
+  account (demo mode); sign-in only unlocks saving.
+
+## Drawing the route on the map
+
+The road route is fetched through the backend and cached:
+
+- **No config needed:** with no key set, it uses the public **OSRM** demo
+  server (fine for light/dev use, best-effort availability).
+- **Recommended for real use:** set `OPENROUTESERVICE_API_KEY` (free tier,
+  ~2,000 requests/day — sign up at https://openrouteservice.org/dev) for a
+  reliable provider.
+- Either way, the polyline is cached in Postgres (spatially, 30-day TTL), so
+  repeat/near-identical routes are free and the stored geometry can seed future
+  corridor/overlap analysis.
+
+Map tiles are OpenStreetMap (no key). No Google Directions billing is involved.
+
+## Accounts & sign-in (optional)
+
+Sign-in uses Google Identity Services on the front end and verifies the ID
+token server-side; no long-lived secret lives in the browser. To enable it:
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   create an **OAuth 2.0 Client ID** of type *Web application*.
+2. Add your app origin (e.g. `http://localhost:8900`) under *Authorized
+   JavaScript origins*.
+3. Set `GOOGLE_OAUTH_CLIENT_ID` in `.env` and restart.
+
+The same Client ID is served to the SPA at runtime via `GET /api/config`, so
+no rebuild is needed when you change it. Auth uses DRF tokens (returned on
+login, stored client-side, sent as `Authorization: Token …`). **Sign in with
+Apple** is scaffolded (`APPLE_OAUTH_CLIENT_ID`) but disabled pending an Apple
+Developer account; leave it blank for now.
 - **Analysis vector** — *Depart at* or *Arrive by*.
 - **Hour range + interval** — e.g. 7 AM–9 AM every 15 minutes.
 - **Days** — multi-select checkboxes, one trend line per day.
@@ -175,6 +223,11 @@ layer is mocked — tests never spend API calls. Coverage includes:
   bias, key precedence (ENV > DB), min/max clamping across traffic models.
 - **API endpoints** (`test_api.py`): setup/validation flows, geocode 409 vs
   candidates, analyze request validation, and cached-data-without-a-key.
+- **Routing** (`test_routing.py`): OSRM/ORS provider selection, lat/lng
+  conversion, spatial cache hit/miss, no-route errors.
+- **Auth & saved data** (`test_auth_and_saved.py`): Google token verification
+  (mocked), user creation/reuse, unverified-email rejection, and owner-scoped
+  saved routes/addresses (users can't see or delete each other's data).
 
 For TDD, watch mode: `docker compose run --rm frontend-test npm run test:watch`
 for the frontend; for the backend re-run `make test-backend` (or

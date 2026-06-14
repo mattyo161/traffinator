@@ -14,6 +14,17 @@ export default function LocationField({ label, value, onChange }) {
   const [error, setError] = useState(null)
   const debounceRef = useRef(null)
 
+  // Follow external changes to `value` (e.g. swapping From/To, or loading a
+  // saved route) so the displayed text stays in sync with the confirmed point.
+  useEffect(() => {
+    if (value && value.label !== query) {
+      setQuery(value.label)
+      setCandidates(null)
+      setError(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value?.lat, value?.lng, value?.label])
+
   function select(candidate) {
     onChange(candidate)
     setQuery(candidate.label)

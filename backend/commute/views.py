@@ -1,19 +1,36 @@
 import logging
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from rest_framework import status
+from django.conf import settings
+from rest_framework import status, viewsets
+from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from commute.models import Setting
+from commute.models import SavedAddress, SavedRoute, Setting
 from commute.serializers import (
     AnalyzeRequestSerializer,
     GeocodeRequestSerializer,
+    GoogleAuthSerializer,
+    RouteRequestSerializer,
+    SavedAddressSerializer,
+    SavedRouteSerializer,
     SetupRequestSerializer,
 )
-from commute.services import analysis, google_maps
+from commute.services import analysis, auth, google_maps, routing
 
 logger = logging.getLogger("commute.views")
+
+
+@api_view(["GET"])
+def config(request):
+    """Public runtime config the SPA needs at startup."""
+    return Response({
+        "configured": google_maps.is_configured(),
+        "google_oauth_client_id": settings.GOOGLE_OAUTH_CLIENT_ID,
+        "apple_oauth_enabled": bool(settings.APPLE_OAUTH_CLIENT_ID),
+    })
 
 
 @api_view(["GET"])
@@ -54,6 +71,18 @@ def geocode(request):
 
 
 @api_view(["POST"])
+def route(request):
+    serializer = RouteRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+    try:
+        result = routing.get_route(data["origin"], data["destination"])
+    except routing.RoutingError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+    return Response(result)
+
+
+@api_view(["POST"])
 def analyze(request):
     serializer = AnalyzeRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -79,3 +108,58 @@ def analyze(request):
     except google_maps.GoogleMapsError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
     return Response(result)
+
+
+@api_view(["POST"])
+def google_login(request):
+    serializer = GoogleAuthSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        user = auth.verify_google_token(serializer.validated_data["credential"])
+    except auth.AuthError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_401_UNAUTHORIZED)
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response({
+        "token": token.key,
+        "user": {"email": user.email, "name": user.get_full_name() or user.email},
+    })
+
+
+@api_view(["POST"])
+def logout(request):
+    if request.user and request.user.is_authenticated:
+        Token.objects.filter(user=request.user).delete()
+    return Response({"ok": True})
+
+
+@api_view(["GET"])
+def me(request):
+    if not (request.user and request.user.is_authenticated):
+        return Response({"authenticated": False})
+    user = request.user
+    return Response({
+        "authenticated": True,
+        "user": {"email": user.email, "name": user.get_full_name() or user.email},
+    })
+
+
+class _OwnerScopedViewSet(viewsets.ModelViewSet):
+    """ModelViewSet limited to the requesting user's own rows."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class SavedAddressViewSet(_OwnerScopedViewSet):
+    queryset = SavedAddress.objects.all()
+    serializer_class = SavedAddressSerializer
+
+
+class SavedRouteViewSet(_OwnerScopedViewSet):
+    queryset = SavedRoute.objects.all()
+    serializer_class = SavedRouteSerializer
