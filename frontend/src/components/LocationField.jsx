@@ -7,7 +7,7 @@ const COORD_RE = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/
 // (e.g. "en-US" -> "us"), so "3 hampshire st" prefers nearby matches.
 const REGION = (navigator.language?.split('-')[1] || '').toLowerCase()
 
-export default function LocationField({ label, value, onChange }) {
+export default function LocationField({ label, value, onChange, labelAction }) {
   const [query, setQuery] = useState(value?.label ?? '')
   const [candidates, setCandidates] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -86,9 +86,12 @@ export default function LocationField({ label, value, onChange }) {
 
   return (
     <div className="relative">
-      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {label}
-      </label>
+      <div className="mb-1 flex items-center justify-between">
+        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {label}
+        </label>
+        {labelAction}
+      </div>
       <input
         value={query}
         onChange={onInput}
@@ -124,8 +127,8 @@ export default function LocationField({ label, value, onChange }) {
       )}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
       {value ? (
-        <p className="mt-1 truncate text-xs text-emerald-700" title={value.label}>
-          ✓ {value.label} ({value.lat.toFixed(4)}, {value.lng.toFixed(4)})
+        <p className="mt-1 text-xs text-emerald-700" title={value.label}>
+          ✓ {value.lat.toFixed(5)}, {value.lng.toFixed(5)}
         </p>
       ) : (
         query.trim().length >= 4 &&
