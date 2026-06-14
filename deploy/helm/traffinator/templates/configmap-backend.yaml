@@ -5,5 +5,8 @@ metadata:
   labels:
     {{- include "traffinator.labels" . | nindent 4 }}
 data:
-  DJANGO_DEBUG: {{ .Values.backend.env.DJANGO_DEBUG | quote }}
-  ANALYSIS_MAX_WORKERS: {{ .Values.backend.env.ANALYSIS_MAX_WORKERS | quote }}
+  # Renders every key under backend.env, so adding a non-secret env var is just
+  # a values change (e.g. the THROTTLE_* rate limits).
+  {{- range $key, $value := .Values.backend.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

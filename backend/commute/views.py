@@ -4,10 +4,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.conf import settings
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from commute import throttles
 from commute.models import SavedAddress, SavedRoute, Setting
 from commute.serializers import (
     AnalyzeRequestSerializer,
@@ -55,6 +56,11 @@ def setup(request):
 
 
 @api_view(["POST"])
+@throttle_classes([
+    throttles.GlobalGoogleThrottle,
+    throttles.LookupAnonThrottle,
+    throttles.LookupUserThrottle,
+])
 def geocode(request):
     serializer = GeocodeRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -71,6 +77,11 @@ def geocode(request):
 
 
 @api_view(["POST"])
+@throttle_classes([
+    throttles.GlobalGoogleThrottle,
+    throttles.LookupAnonThrottle,
+    throttles.LookupUserThrottle,
+])
 def route(request):
     serializer = RouteRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -83,6 +94,11 @@ def route(request):
 
 
 @api_view(["POST"])
+@throttle_classes([
+    throttles.GlobalGoogleThrottle,
+    throttles.AnalyzeAnonThrottle,
+    throttles.AnalyzeUserThrottle,
+])
 def analyze(request):
     serializer = AnalyzeRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
