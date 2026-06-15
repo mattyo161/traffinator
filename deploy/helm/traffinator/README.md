@@ -134,6 +134,9 @@ postgres:
     storage: { size: 5Gi, storageClass: longhorn }
     monitoring: { enablePodMonitor: true }   # with kube-prometheus-stack
     superuserAccess: false        # true for admin ops (e.g. schema-remap restores)
+    # WAL archiving for PITR via the Barman Cloud Plugin. Only wires the plugin
+    # onto the Cluster — create the ObjectStore + ScheduledBackup yourself.
+    backup: { enabled: true, objectStoreName: traffinator-store }
 ```
 See [../../docs/runbooks/postgres-operations.md](../../docs/runbooks/postgres-operations.md)
 for day-2 operations (backups, restores, replication, metrics).
@@ -251,6 +254,7 @@ credentials + `enableOCI: true`.)
 | `backend.metrics.serviceMonitor.enabled` | `false` | Create a `ServiceMonitor` (needs kube-prometheus-stack CRDs) |
 | `backend.metrics.serviceMonitor.{interval,scrapeTimeout,labels}` | `""` / `""` / `{}` | Scrape tuning; add `labels.release: <prom-release>` to match a Prometheus selector |
 | `postgres.cnpg.superuserAccess` | `false` | Create the `<cluster>-superuser` secret for admin ops |
+| `postgres.cnpg.backup.enabled` / `.objectStoreName` | `false` / `""` | Wire the Barman Cloud WAL-archiver plugin onto the Cluster (PITR). Requires an existing `barmancloud.cnpg.io/ObjectStore`; ScheduledBackup managed outside the chart |
 | `postgres.cnpg.pgaudit.enabled` | `false` | Enable pgAudit (adds `pgaudit` to `shared_preload_libraries`, creates the extension, sets audit params) |
 | `postgres.cnpg.pgaudit.log` / `.logCatalog` | `write,ddl,role` / `false` | `pgaudit.log` classes and `pgaudit.log_catalog` |
 | `postgres.bundled.persistence.{size,storageClass}` | `5Gi` / `""` | bundled mode |
