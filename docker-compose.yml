@@ -24,6 +24,9 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
       ANALYSIS_MAX_WORKERS: ${ANALYSIS_MAX_WORKERS:-8}
+      # 1 = enforce per-tier analyze limits (commute.tiers). Off until the
+      # tier-aware SPA ships (issue #32, dark launch).
+      TIER_ENFORCEMENT: ${TIER_ENFORCEMENT:-0}
       THROTTLE_ANALYZE_ANON: ${THROTTLE_ANALYZE_ANON:-5/hour}
       THROTTLE_ANALYZE_USER: ${THROTTLE_ANALYZE_USER:-60/hour}
       THROTTLE_LOOKUP_ANON: ${THROTTLE_LOOKUP_ANON:-30/hour}

@@ -8,7 +8,8 @@ from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from commute import throttles
+from commute import throttles, tiers
+from commute.coords import haversine_miles
 from commute.models import SavedAddress, SavedRoute, Setting
 from commute.serializers import (
     AnalyzeRequestSerializer,
@@ -26,11 +27,15 @@ logger = logging.getLogger("commute.views")
 
 @api_view(["GET"])
 def config(request):
-    """Public runtime config the SPA needs at startup."""
+    """Public runtime config the SPA needs at startup, including the requester's
+    effective tier and the full tier→limits matrix (so the UI grays-out/upsells
+    from the same data the API enforces — see commute.tiers)."""
     return Response({
         "configured": google_maps.is_configured(),
         "google_oauth_client_id": settings.GOOGLE_OAUTH_CLIENT_ID,
         "apple_oauth_enabled": bool(settings.APPLE_OAUTH_CLIENT_ID),
+        "tier": tiers.effective_tier(request),
+        "tiers": tiers.public_matrix(),
     })
 
 
@@ -86,8 +91,13 @@ def route(request):
     serializer = RouteRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
+    # Per-tier route-cache radius only when enforcement is on (else default).
+    route_kwargs = {}
+    if settings.TIER_ENFORCEMENT_ENABLED:
+        tier = tiers.effective_tier(request)
+        route_kwargs["cache_radius_m"] = tiers.limits_for(tier)["route_cache_radius_m"]
     try:
-        result = routing.get_route(data["origin"], data["destination"])
+        result = routing.get_route(data["origin"], data["destination"], **route_kwargs)
     except routing.RoutingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
     return Response(result)
@@ -108,6 +118,29 @@ def analyze(request):
     except (ZoneInfoNotFoundError, ValueError):
         return Response({"error": f"Unknown timezone '{data['timezone']}'."},
                         status=status.HTTP_400_BAD_REQUEST)
+
+    # Tier enforcement (authoritative; mirrors the matrix the SPA grays-out
+    # from). Gated by TIER_ENFORCEMENT_ENABLED so the backend can ship ahead of
+    # the tier-aware SPA — when off, requests aren't rejected and the cache uses
+    # its default radius (behavior unchanged). See commute.tiers / issue #32.
+    tier = tiers.effective_tier(request)
+    cache_radius_m = None
+    if settings.TIER_ENFORCEMENT_ENABLED:
+        violations = tiers.check_analyze(
+            tier,
+            interval_minutes=data["interval_minutes"],
+            days=data["days"],
+            start_hour=data["start_hour"],
+            end_hour=data["end_hour"],
+            distance_mi=haversine_miles(data["origin"], data["destination"]),
+        )
+        if violations:
+            return Response(
+                {"error": " ".join(violations), "tier": tier, "upsell": True},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        cache_radius_m = tiers.limits_for(tier)["traffic_cache_radius_m"]
+
     try:
         result = analysis.run_analysis(
             origin=data["origin"],
@@ -118,6 +151,7 @@ def analyze(request):
             interval_minutes=data["interval_minutes"],
             days=data["days"],
             timezone_name=data["timezone"],
+            cache_radius_m=cache_radius_m,
         )
     except google_maps.ApiKeyMissing as exc:
         return Response({"error": str(exc)}, status=status.HTTP_409_CONFLICT)

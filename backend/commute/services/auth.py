@@ -12,6 +12,8 @@ from django.contrib.auth.models import User
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
+from commute.models import UserProfile
+
 logger = logging.getLogger("commute.auth")
 
 
@@ -58,5 +60,8 @@ def verify_google_token(token):
         updates.append("email")
     if updates:
         user.save(update_fields=updates)
+    # Every authenticated user has a profile (default FREE); backfills accounts
+    # created before tiers existed on their next sign-in.
+    UserProfile.objects.get_or_create(user=user)
     logger.info("Google sign-in %s for %s", "created user" if created else "ok", email)
     return user

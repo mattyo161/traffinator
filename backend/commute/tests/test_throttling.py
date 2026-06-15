@@ -34,9 +34,11 @@ def post(client, path, payload, token=None):
     return client.post(path, json.dumps(payload), content_type="application/json", **headers)
 
 
+# interval 60 + a single weekday in the morning window keeps this valid for the
+# ANON tier, so these tests exercise *throttling* (not tier limits — see test_tiers).
 ANALYZE_PAYLOAD = dict(
     origin=ORIGIN, destination=DEST, vector="departure",
-    start_hour=8, end_hour=8, interval_minutes=30, days=[0],
+    start_hour=8, end_hour=8, interval_minutes=60, days=[0],
     timezone="America/New_York",
 )
 GEOCODE_PAYLOAD = {"query": "Boston, MA"}

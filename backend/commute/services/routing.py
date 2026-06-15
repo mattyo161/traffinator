@@ -44,11 +44,11 @@ class RoutingError(Exception):
     pass
 
 
-def _find_cached(origin, destination):
+def _find_cached(origin, destination, radius_m=CACHE_RADIUS_M):
     params = {
         "olat": origin["lat"], "olng": origin["lng"],
         "dlat": destination["lat"], "dlng": destination["lng"],
-        "radius": CACHE_RADIUS_M, "max_age": CACHE_MAX_AGE_DAYS,
+        "radius": radius_m, "max_age": CACHE_MAX_AGE_DAYS,
     }
     rows = list(RouteGeometry.objects.raw(_LOOKUP_SQL, params))
     return rows[0] if rows else None
@@ -91,9 +91,11 @@ def _fetch_osrm(origin, destination):
     return [[lat, lng] for lng, lat in coords], route.get("distance"), "osrm"
 
 
-def get_route(origin, destination):
-    """Return {geometry, distance_m, provider, cached}. Cache-first."""
-    cached = _find_cached(origin, destination)
+def get_route(origin, destination, cache_radius_m=CACHE_RADIUS_M):
+    """Return {geometry, distance_m, provider, cached}. Cache-first.
+
+    `cache_radius_m` is the per-tier spatial reuse radius (commute.tiers)."""
+    cached = _find_cached(origin, destination, radius_m=cache_radius_m)
     if cached:
         logger.info("Route cache HIT: sample #%s (%s)", cached.id, cached.provider)
         metrics.record_cache_hit(cached.provider, "directions", "free")

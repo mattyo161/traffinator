@@ -38,6 +38,9 @@ backend:
   env:
     DJANGO_DEBUG: "0"
     ANALYSIS_MAX_WORKERS: "8"
+    # "1" enforces per-tier analyze limits (commute.tiers). Off until the
+    # tier-aware SPA ships (issue #32, dark launch).
+    TIER_ENFORCEMENT: "0"
     # Rate limits protecting the paid Google endpoints (see commute.throttles).
     THROTTLE_ANALYZE_ANON: "5/hour"
     THROTTLE_ANALYZE_USER: "60/hour"

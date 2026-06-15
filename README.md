@@ -65,6 +65,7 @@ All settings are optional and live in `.env` (see [.env.example](.env.example)):
 | `ANALYSIS_MAX_WORKERS` | `8` | Parallel Google Maps requests per analysis run |
 | `DJANGO_SECRET_KEY` | dev default | Set for production-like deployments |
 | `DJANGO_DEBUG` | `0` | Django debug mode |
+| `TIER_ENFORCEMENT` | `0` | `1` enforces per-tier analyze limits (see [User tiers](#user-tiers)) |
 
 ### Using Supabase instead of the bundled Postgres
 
@@ -90,6 +91,29 @@ of the following hold (`commute/services/cache.py`):
 On a hit the record is served instantly; on a miss the backend fetches live
 predictions and writes the result — including the **full raw API responses** —
 to the `commute_trafficsample` table.
+
+The **1-mile** match radius above is the default; with tier enforcement on it
+becomes per-tier (see below).
+
+## User tiers
+
+Analysis controls are gated by a user **tier** — `ANON` (unauthenticated),
+`FREE` (signed in), or `PRO` (granted manually) — covering which interval steps,
+days, hour windows, and trip distances are allowed, plus the per-tier cache
+match radius. The tier→limits matrix is defined once in **`commute/tiers.py`**;
+the backend both enforces it and serves it (with the requester's current tier)
+via `GET /api/config`, so the SPA renders the same gray-outs/upsells.
+
+PRO is assigned manually (no billing yet):
+
+```bash
+docker compose exec backend python manage.py set_tier you@example.com PRO
+```
+
+Enforcement is **off by default** (`TIER_ENFORCEMENT=0`) so the API can ship
+ahead of the tier-aware UI; set `TIER_ENFORCEMENT=1` to enforce. When off, the
+matrix is still served (the UI can read it) but no request is rejected and the
+cache uses its default radius.
 
 ## API
 

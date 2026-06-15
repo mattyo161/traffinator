@@ -110,7 +110,7 @@ class AnalysisCacheHitInstrumentationTests(TestCase):
         sample = make_sample(vector=vector)
         with mock.patch.object(analysis.cache, "find_cached", return_value=sample):
             result, was_cached = analysis._fetch_point(
-                ORIGIN, DEST, vector, 0, dt.time(8, 0), ZoneInfo("UTC"), None
+                ORIGIN, DEST, vector, 0, dt.time(8, 0), ZoneInfo("UTC"), None, 1609.344
             )
         self.assertTrue(was_cached)
 

@@ -16,8 +16,20 @@ from rest_framework.throttling import (
 )
 
 
+class AnonCookieIdentMixin:
+    """Key anonymous throttles on the signed anon_id cookie *and* IP, so a
+    single anonymous client gets one bucket even behind a shared/NATed IP, while
+    still bounding a cookie-clearing client by IP. Falls back to IP-only if the
+    cookie middleware hasn't run (e.g. in isolated unit tests)."""
+
+    def get_ident(self, request):
+        ip = super().get_ident(request)
+        anon = getattr(request, "anon_id", None)
+        return f"{anon}:{ip}" if anon else ip
+
+
 # analyze: heaviest endpoint (many Distance Matrix calls per request).
-class AnalyzeAnonThrottle(AnonRateThrottle):
+class AnalyzeAnonThrottle(AnonCookieIdentMixin, AnonRateThrottle):
     scope = "analyze_anon"
 
 
@@ -26,7 +38,7 @@ class AnalyzeUserThrottle(UserRateThrottle):
 
 
 # route + geocode: lighter (~one Google/OSRM call per request) — shared budget.
-class LookupAnonThrottle(AnonRateThrottle):
+class LookupAnonThrottle(AnonCookieIdentMixin, AnonRateThrottle):
     scope = "lookup_anon"
 
 

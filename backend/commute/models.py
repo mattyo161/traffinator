@@ -1,6 +1,39 @@
 from django.db import models
 
 
+class UserProfile(models.Model):
+    """Per-user tier + optional sub-tier label. ANON is the no-account case, so
+    a profile only exists for authenticated users; new accounts default to FREE
+    (see commute.services.auth). PRO is granted manually (admin/DB) for now.
+
+    The tier→limits matrix itself lives in commute.tiers — this only records
+    *which* tier a user is on."""
+
+    TIER_CHOICES = [("FREE", "FREE"), ("PRO", "PRO")]
+    # PRO sub-tiers are labels only for v1 (all share PRO limits — see #36).
+    SUB_TIER_CHOICES = [
+        ("", "—"),
+        ("TRIAL", "TRIAL"),
+        ("COMP", "COMP"),
+        ("USER", "USER"),
+        ("TEAM", "TEAM"),
+    ]
+
+    user = models.OneToOneField(
+        "auth.User", on_delete=models.CASCADE, related_name="profile"
+    )
+    tier = models.CharField(max_length=8, choices=TIER_CHOICES, default="FREE")
+    sub_tier = models.CharField(
+        max_length=8, choices=SUB_TIER_CHOICES, blank=True, default=""
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        label = f"{self.tier}/{self.sub_tier}" if self.sub_tier else self.tier
+        return f"{self.user} [{label}]"
+
+
 class Setting(models.Model):
     """App-level key/value settings (e.g. the Google Maps API key entered
     through the first-launch setup screen). ENV vars take precedence."""
