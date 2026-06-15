@@ -1,10 +1,22 @@
 import LocationField from './LocationField'
 import SavedPanel from './SavedPanel'
 import { PALETTES } from '../palettes'
+import {
+  dayAllowed,
+  fromHourAllowed,
+  intervalOptions,
+  maxDays,
+  maxEndHour,
+  tierLimits,
+  upsellMessage,
+} from '../utils/tiers'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const INTERVALS = [15, 30]
 const HOURS = Array.from({ length: 24 }, (_, h) => h)
+// Used until the tier matrix loads (or if the backend is unreachable).
+const FALLBACK_INTERVALS = [60, 30, 15].map((minutes) => ({
+  minutes, enabled: true, comingSoon: false,
+}))
 
 function hourLabel(h) {
   const ampm = h < 12 ? 'AM' : 'PM'
@@ -19,16 +31,29 @@ export default function Sidebar({
   running,
   estimatedCalls,
   tooFar,
+  tier,
+  tierMatrix,
   onApplyRoute,
   onApplyAddress,
 }) {
   const set = (patch) => onChange({ ...params, ...patch })
 
+  const limits = tierLimits(tierMatrix, tier)
+  const upsell = upsellMessage(tierMatrix, tier)
+  const intervalOpts = tierMatrix ? intervalOptions(tierMatrix, tier) : FALLBACK_INTERVALS
+  const dayCap = maxDays(limits)
+  const intervalRestricted = intervalOpts.some((o) => !o.enabled && !o.comingSoon)
+  const daysRestricted = DAYS.some((_, d) => !dayAllowed(limits, d))
+
   function toggleDay(day) {
-    const days = params.days.includes(day)
-      ? params.days.filter((d) => d !== day)
-      : [...params.days, day].sort()
-    set({ days })
+    const selected = params.days.includes(day)
+    if (selected) {
+      set({ days: params.days.filter((d) => d !== day) })
+      return
+    }
+    // Adding: only if the tier allows the day and we're under the cap.
+    if (!dayAllowed(limits, day) || params.days.length >= dayCap) return
+    set({ days: [...params.days, day].sort() })
   }
 
   const ready =
@@ -99,12 +124,16 @@ export default function Sidebar({
             value={params.startHour}
             onChange={(e) => {
               const startHour = Number(e.target.value)
-              set({ startHour, endHour: Math.max(startHour, params.endHour) })
+              const endHour = Math.min(
+                Math.max(startHour, params.endHour),
+                maxEndHour(limits, startHour)
+              )
+              set({ startHour, endHour })
             }}
             className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
           >
             {HOURS.map((h) => (
-              <option key={h} value={h}>
+              <option key={h} value={h} disabled={!fromHourAllowed(limits, h)}>
                 {hourLabel(h)}
               </option>
             ))}
@@ -120,7 +149,7 @@ export default function Sidebar({
             className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
           >
             {HOURS.filter((h) => h >= params.startHour).map((h) => (
-              <option key={h} value={h}>
+              <option key={h} value={h} disabled={h > maxEndHour(limits, params.startHour)}>
                 {hourLabel(h)}
               </option>
             ))}
@@ -133,21 +162,35 @@ export default function Sidebar({
           Interval step
         </label>
         <div className="grid grid-cols-4 gap-2">
-          {INTERVALS.map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => set({ intervalMinutes: m })}
-              className={`rounded-lg border px-2 py-2 text-sm font-medium ${
-                params.intervalMinutes === m
-                  ? 'border-blue-600 bg-blue-50 text-blue-700'
-                  : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {m}m
-            </button>
-          ))}
+          {intervalOpts.map(({ minutes, enabled, comingSoon }) => {
+            const selected = params.intervalMinutes === minutes
+            const title = comingSoon ? 'Coming soon' : enabled ? undefined : upsell
+            return (
+              <button
+                key={minutes}
+                type="button"
+                disabled={!enabled}
+                title={title}
+                onClick={() => enabled && set({ intervalMinutes: minutes })}
+                className={`rounded-lg border px-2 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+                  selected
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-slate-300 text-slate-600 enabled:hover:bg-slate-50'
+                }`}
+              >
+                {minutes}m
+                {comingSoon && (
+                  <span className="block text-[8px] font-bold uppercase leading-none text-amber-500">
+                    Soon
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
+        {intervalRestricted && (
+          <p className="mt-1 text-[11px] text-slate-400">🔒 {upsell}</p>
+        )}
       </div>
 
       <div>
@@ -155,25 +198,45 @@ export default function Sidebar({
           Days of week
         </label>
         <div className="grid grid-cols-4 gap-2 sm:grid-cols-7 lg:grid-cols-4">
-          {DAYS.map((name, day) => (
-            <label
-              key={name}
-              className={`flex cursor-pointer items-center justify-center gap-1 rounded-lg border px-1 py-2 text-xs font-medium ${
-                params.days.includes(day)
-                  ? 'border-blue-600 bg-blue-50 text-blue-700'
-                  : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={params.days.includes(day)}
-                onChange={() => toggleDay(day)}
-                className="sr-only"
-              />
-              {name}
-            </label>
-          ))}
+          {DAYS.map((name, day) => {
+            const selected = params.days.includes(day)
+            const allowed = dayAllowed(limits, day)
+            const atCap = !selected && params.days.length >= dayCap
+            const disabled = !allowed || atCap
+            const title = !allowed
+              ? upsell
+              : atCap
+                ? `Up to ${dayCap} day${dayCap === 1 ? '' : 's'} on your plan. ${upsell}`
+                : undefined
+            return (
+              <label
+                key={name}
+                title={title}
+                className={`flex items-center justify-center gap-1 rounded-lg border px-1 py-2 text-xs font-medium ${
+                  disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                } ${
+                  selected
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-slate-300 text-slate-600'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  disabled={disabled}
+                  onChange={() => toggleDay(day)}
+                  className="sr-only"
+                />
+                {name}
+              </label>
+            )
+          })}
         </div>
+        {(daysRestricted || dayCap < 7) && (
+          <p className="mt-1 text-[11px] text-slate-400">
+            🔒 {daysRestricted ? 'Weekdays only' : `Up to ${dayCap} days`} — {upsell}
+          </p>
+        )}
       </div>
 
       <div>

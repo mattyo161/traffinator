@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import { isCommuteTooFar } from './utils/geo'
+import {
+  clampParamsToTier,
+  isTooFarForTier,
+  maxDistanceMiles,
+  tierLimits,
+} from './utils/tiers'
 import { useAuth } from './auth/AuthContext'
 import SetupWizard from './components/SetupWizard'
 import Sidebar from './components/Sidebar'
@@ -20,9 +26,16 @@ const DEFAULT_PARAMS = {
 }
 
 export default function App() {
-  const { ready: authReady, mapsConfigured, setMapsConfigured } = useAuth()
+  const { ready: authReady, mapsConfigured, setMapsConfigured, tier, tierMatrix } = useAuth()
   const [skipped] = useState(() => !!localStorage.getItem('setupSkipped'))
   const [params, setParams] = useState(DEFAULT_PARAMS)
+  const limits = useMemo(() => tierLimits(tierMatrix, tier), [tierMatrix, tier])
+
+  // Keep params within the current tier (e.g. clamp ANON to 60m / 2 weekdays),
+  // re-running whenever the tier or its matrix changes (sign-in/out).
+  useEffect(() => {
+    if (tierMatrix) setParams((p) => clampParamsToTier(p, tierMatrix, tier))
+  }, [tier, tierMatrix])
   const [results, setResults] = useState(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState(null)
@@ -47,10 +60,15 @@ export default function App() {
     return slots * params.days.length * perPoint
   }, [params])
 
-  // Implausible commute (likely a wrong geocode): flag the inputs and block Run.
+  // Too far apart: a wrong geocode, or beyond the tier's max trip distance.
+  // Uses the tier limit when the matrix has loaded; falls back to the flat
+  // 100-mile sanity check otherwise.
   const tooFar = useMemo(
-    () => isCommuteTooFar(params.origin, params.destination),
-    [params.origin, params.destination]
+    () =>
+      limits
+        ? isTooFarForTier(limits, params.origin, params.destination)
+        : isCommuteTooFar(params.origin, params.destination),
+    [limits, params.origin, params.destination]
   )
 
   async function runAnalysis() {
@@ -107,6 +125,8 @@ export default function App() {
         running={running}
         estimatedCalls={estimatedCalls}
         tooFar={tooFar}
+        tier={tier}
+        tierMatrix={tierMatrix}
         onApplyRoute={applyRoute}
         onApplyAddress={applyAddress}
       />
@@ -133,7 +153,11 @@ export default function App() {
           </div>
         )}
 
-        <RoutePreview origin={params.origin} destination={params.destination} />
+        <RoutePreview
+          origin={params.origin}
+          destination={params.destination}
+          maxMiles={maxDistanceMiles(limits)}
+        />
 
         {running && (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">

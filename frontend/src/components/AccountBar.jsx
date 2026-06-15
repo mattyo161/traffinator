@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import GoogleSignInButton from './GoogleSignInButton'
 
 export default function AccountBar() {
-  const { user, googleClientId, appleEnabled, loginWithGoogle, logout } = useAuth()
+  const { user, tier, googleClientId, appleEnabled, loginWithGoogle, logout } = useAuth()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState(null)
 
@@ -22,6 +22,15 @@ export default function AccountBar() {
       <div className="flex items-center gap-3 text-sm">
         <span className="text-slate-600">
           Signed in as <span className="font-medium">{user.name}</span>
+        </span>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+            tier === 'PRO'
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-slate-100 text-slate-500'
+          }`}
+        >
+          {tier}
         </span>
         <button
           type="button"

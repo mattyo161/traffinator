@@ -25,7 +25,8 @@ function FitBounds({ bounds }) {
   return null
 }
 
-export default function RoutePreview({ origin, destination }) {
+export default function RoutePreview({ origin, destination, maxMiles = MAX_COMMUTE_MILES }) {
+  const limitMiles = maxMiles ?? MAX_COMMUTE_MILES
   const [route, setRoute] = useState(null) // { geometry: [[lat,lng]], distance_m }
   const [routeError, setRouteError] = useState(null)
 
@@ -73,11 +74,11 @@ export default function RoutePreview({ origin, destination }) {
           </span>
         )}
       </div>
-      {straightKm !== null && straightKm * KM_TO_MILES > MAX_COMMUTE_MILES && (
+      {straightKm !== null && straightKm * KM_TO_MILES > limitMiles && (
         <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-          These points are {fmt(straightKm * KM_TO_MILES)} miles apart — that doesn't
-          look like a commute. One of the addresses probably resolved to the wrong
-          place; double-check both locations on the map below.
+          These points are {fmt(straightKm * KM_TO_MILES)} miles apart, beyond the
+          {' '}{Math.round(limitMiles)}-mile limit for your plan — double-check both
+          locations on the map below, or upgrade for longer trips.
         </div>
       )}
       <MapContainer
