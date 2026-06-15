@@ -118,13 +118,15 @@ class AnalyzeValidationTests(TestCase):
 
 
 class AnalyzeApiTests(TestCase):
+    # Anonymous (ANON tier): interval 60 + one morning weekday keeps the request
+    # within ANON limits so these exercise the run itself, not tier rejection.
     PAYLOAD = dict(
         origin=ORIGIN,
         destination=DEST,
         vector="departure",
         start_hour=8,
         end_hour=8,
-        interval_minutes=30,
+        interval_minutes=60,
         days=[0],
         timezone="America/New_York",
     )

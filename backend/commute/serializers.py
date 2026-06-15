@@ -22,7 +22,10 @@ class AnalyzeRequestSerializer(serializers.Serializer):
     vector = serializers.ChoiceField(choices=["departure", "arrival"])
     start_hour = serializers.IntegerField(min_value=0, max_value=23)
     end_hour = serializers.IntegerField(min_value=0, max_value=23)
-    interval_minutes = serializers.ChoiceField(choices=[5, 10, 15, 30])
+    # Structural choices only; which of these a tier may actually use is
+    # enforced against commute.tiers in the analyze view. 10 was dropped (#15);
+    # 60 added and 5 is "coming soon" (#32).
+    interval_minutes = serializers.ChoiceField(choices=[5, 15, 30, 60])
     days = serializers.ListField(
         child=serializers.IntegerField(min_value=0, max_value=6),
         min_length=1, max_length=7,

@@ -24,6 +24,8 @@ MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
+    # Issues the signed anon_id cookie used to key ANON tier limits (commute.tiers).
+    "commute.middleware.AnonCookieMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
@@ -84,6 +86,14 @@ REST_FRAMEWORK = {
         "google_global": os.environ.get("THROTTLE_GOOGLE_GLOBAL", "2000/day"),
     },
 }
+
+# User tiers (commute.tiers). The tier→limits matrix is always *served* via
+# /api/config so the SPA can render gray-outs/upsells; this flag gates whether
+# the backend actively *enforces* it (rejects out-of-tier analyze requests and
+# applies per-tier cache radii). Kept off by default so the backend can ship
+# ahead of the tier-aware frontend (dark launch) — enable once the SPA renders
+# the limits. See issue #32.
+TIER_ENFORCEMENT_ENABLED = os.environ.get("TIER_ENFORCEMENT", "0") == "1"
 
 # Google OAuth: the SPA obtains an ID token via Google Identity Services and
 # posts it to /api/auth/google, which verifies it against this client ID.

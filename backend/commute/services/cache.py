@@ -37,8 +37,12 @@ LIMIT 1
 """
 
 
-def find_cached(origin, destination, vector, day_of_week, time_of_day):
-    """Return the freshest matching TrafficSample, or None on a cache miss."""
+def find_cached(origin, destination, vector, day_of_week, time_of_day, radius_m=MILE_METERS):
+    """Return the freshest matching TrafficSample, or None on a cache miss.
+
+    `radius_m` is the spatial match radius (per-tier; see commute.tiers). Looser
+    radii reuse more cached points (cheaper, fewer paid Google calls); tighter
+    radii are more precise."""
     time_seconds = time_of_day.hour * 3600 + time_of_day.minute * 60 + time_of_day.second
     params = {
         "vector": vector,
@@ -47,7 +51,7 @@ def find_cached(origin, destination, vector, day_of_week, time_of_day):
         "olng": origin["lng"],
         "dlat": destination["lat"],
         "dlng": destination["lng"],
-        "radius": MILE_METERS,
+        "radius": radius_m,
         "time_seconds": time_seconds,
         "time_delta": TIME_DELTA_SECONDS,
     }

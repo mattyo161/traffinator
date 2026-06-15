@@ -139,7 +139,8 @@ class ArrivalWeekShiftTests(TestCase):
 
         with mock.patch.object(google_maps, "_request", side_effect=fake_request):
             sample, cached = analysis._fetch_point(
-                ORIGIN, DEST, "arrival", slot_dt.weekday(), slot, tz, analysis._Counter()
+                ORIGIN, DEST, "arrival", slot_dt.weekday(), slot, tz,
+                analysis._Counter(), analysis.cache.MILE_METERS
             )
 
         self.assertFalse(cached)
@@ -162,7 +163,8 @@ class ArrivalWeekShiftTests(TestCase):
 
         with mock.patch.object(google_maps, "_request", side_effect=fake_request):
             sample, _ = analysis._fetch_point(
-                ORIGIN, DEST, "arrival", slot_dt.weekday(), slot, tz, analysis._Counter()
+                ORIGIN, DEST, "arrival", slot_dt.weekday(), slot, tz,
+                analysis._Counter(), analysis.cache.MILE_METERS
             )
 
         target = dt.datetime.fromisoformat(sample.raw_response["target_time"])

@@ -72,9 +72,9 @@ class _Counter:
             self.value += n
 
 
-def _fetch_point(origin, destination, vector, day, slot, tz, api_counter):
+def _fetch_point(origin, destination, vector, day, slot, tz, api_counter, cache_radius_m):
     """Resolve one (day, time) point: cache lookup, else live Google fetch."""
-    sample = cache.find_cached(origin, destination, vector, day, slot)
+    sample = cache.find_cached(origin, destination, vector, day, slot, radius_m=cache_radius_m)
     if sample:
         # A hit avoids the live Google calls this point would otherwise make:
         # 3 traffic-model probes, plus 1 best_guess duration probe for arrival.
@@ -128,7 +128,11 @@ def _fetch_point(origin, destination, vector, day, slot, tz, api_counter):
     return sample, False
 
 
-def run_analysis(origin, destination, vector, start_hour, end_hour, interval_minutes, days, timezone_name):
+def run_analysis(origin, destination, vector, start_hour, end_hour, interval_minutes,
+                 days, timezone_name, cache_radius_m=None):
+    # None -> the cache's own default radius (callers that don't tier-gate).
+    if cache_radius_m is None:
+        cache_radius_m = cache.MILE_METERS
     tz = ZoneInfo(timezone_name)
     slots = time_slots(start_hour, end_hour, interval_minutes)
     tasks = [(day, slot) for day in sorted(days) for slot in slots]
@@ -143,7 +147,8 @@ def run_analysis(origin, destination, vector, start_hour, end_hour, interval_min
     def worker(task):
         day, slot = task
         try:
-            return task, _fetch_point(origin, destination, vector, day, slot, tz, api_counter), None
+            return task, _fetch_point(origin, destination, vector, day, slot, tz,
+                                      api_counter, cache_radius_m), None
         except Exception as exc:  # surface per-point errors without killing the run
             logger.error("Point day=%s time=%s failed: %s", day, slot, exc)
             return task, None, str(exc)
