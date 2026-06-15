@@ -33,10 +33,22 @@ fi
 echo "Applying migrations..."
 python manage.py migrate --noinput
 
+# Prometheus multiprocess dir: gunicorn runs >1 worker, so prometheus_client
+# must aggregate metrics across them via a shared directory. Set+exported only on
+# this server path (NOT via compose/k8s env) so it never leaks into one-off
+# `docker compose run ... manage.py test` invocations, which exec above before
+# reaching here and would otherwise try (and fail) to use multiprocess mode.
+# Wipe the dir on boot so stale samples from a previous container don't leak in.
+export PROMETHEUS_MULTIPROC_DIR="${PROMETHEUS_MULTIPROC_DIR:-/tmp/prometheus-multiproc}"
+echo "Preparing Prometheus multiprocess dir: $PROMETHEUS_MULTIPROC_DIR"
+rm -rf "$PROMETHEUS_MULTIPROC_DIR"
+mkdir -p "$PROMETHEUS_MULTIPROC_DIR"
+
 echo "Starting gunicorn..."
 # Long timeout: an analysis run can hold the request open while many
 # Google Maps calls are in flight.
 exec gunicorn config.wsgi:application \
+    --config /app/gunicorn.conf.py \
     --bind 0.0.0.0:8000 \
     --workers 2 \
     --threads 8 \

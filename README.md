@@ -130,6 +130,36 @@ Other endpoints:
 - `GET/POST/DELETE /api/saved-routes/` and `/api/saved-addresses/` — require
   `Authorization: Token …`; scoped to the signed-in user.
 
+## Metrics (Prometheus)
+
+The backend exposes Prometheus metrics at **`GET /metrics`** (via
+`django-prometheus`). It is served off the backend Service on port 8000 — the
+frontend nginx only proxies `/api`, so `/metrics` is in-cluster only, not public.
+
+Besides the stock `django_http_*` request/latency series, Traffinator records
+**outbound external-API usage** (`commute/metrics.py`) so you can see paid
+(Google Maps) vs free (OSRM/ORS) consumption and prove the cache is avoiding
+paid calls:
+
+- `traffinator_external_api_calls_total{provider,endpoint,billable,outcome}` —
+  every outbound call, labelled `billable="paid"|"free"` and
+  `outcome="ok"|"error"|"cache_hit"`. A `cache_hit` increments by the number of
+  live calls the hit *avoided* (3 per traffic point, 4 for arrival-mode), so
+  `sum by (billable) (… outcome="cache_hit")` is a direct "calls/cost avoided"
+  figure.
+- `traffinator_external_api_duration_seconds{provider,endpoint}` — per-provider
+  call latency histogram.
+
+**Multi-worker note:** gunicorn runs multiple workers, so `prometheus_client`
+runs in multiprocess mode — each worker writes to a shared
+`PROMETHEUS_MULTIPROC_DIR` that the `/metrics` view aggregates. `entrypoint.sh`
+sets and wipes that dir on boot and `gunicorn.conf.py`'s `child_exit` hook reaps
+dead workers (`multiprocess.mark_process_dead`). It's set only on the server
+path, so it never leaks into one-off `manage.py test` runs.
+
+In the Helm chart, a `ServiceMonitor` (for kube-prometheus-stack) can be enabled
+with `backend.metrics.serviceMonitor.enabled=true`.
+
 ## Using the app
 
 - **From / To** — type an address and pick the right match from the typeahead

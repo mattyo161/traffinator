@@ -247,6 +247,9 @@ credentials + `enableOCI: true`.)
 | `postgres.cnpg.instances` | `2` | HA replica count (cnpg mode) |
 | `postgres.cnpg.storage.{size,storageClass}` | `5Gi` / `""` | cnpg mode; set `longhorn` on the homelab |
 | `postgres.cnpg.monitoring.enablePodMonitor` | `false` | DB metrics via kube-prometheus-stack |
+| `backend.metrics.enabled` | `true` | Backend exposes Prometheus metrics at `/metrics` (port 8000) |
+| `backend.metrics.serviceMonitor.enabled` | `false` | Create a `ServiceMonitor` (needs kube-prometheus-stack CRDs) |
+| `backend.metrics.serviceMonitor.{interval,scrapeTimeout,labels}` | `""` / `""` / `{}` | Scrape tuning; add `labels.release: <prom-release>` to match a Prometheus selector |
 | `postgres.cnpg.superuserAccess` | `false` | Create the `<cluster>-superuser` secret for admin ops |
 | `postgres.cnpg.pgaudit.enabled` | `false` | Enable pgAudit (adds `pgaudit` to `shared_preload_libraries`, creates the extension, sets audit params) |
 | `postgres.cnpg.pgaudit.log` / `.logCatalog` | `write,ddl,role` / `false` | `pgaudit.log` classes and `pgaudit.log_catalog` |

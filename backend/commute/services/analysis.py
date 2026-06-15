@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 from django.db import close_old_connections
 
+from commute import metrics
 from commute.models import TrafficSample
 from commute.services import cache, google_maps
 
@@ -75,6 +76,10 @@ def _fetch_point(origin, destination, vector, day, slot, tz, api_counter):
     """Resolve one (day, time) point: cache lookup, else live Google fetch."""
     sample = cache.find_cached(origin, destination, vector, day, slot)
     if sample:
+        # A hit avoids the live Google calls this point would otherwise make:
+        # 3 traffic-model probes, plus 1 best_guess duration probe for arrival.
+        avoided = 4 if vector == "arrival" else 3
+        metrics.record_cache_hit("google_maps", "distance_matrix", "paid", count=avoided)
         return sample, True
 
     target = next_occurrence(day, slot, tz)

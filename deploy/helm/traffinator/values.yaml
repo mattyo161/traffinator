@@ -44,6 +44,19 @@ backend:
     THROTTLE_LOOKUP_ANON: "30/hour"
     THROTTLE_LOOKUP_USER: "120/hour"
     THROTTLE_GOOGLE_GLOBAL: "2000/day"
+  # Prometheus scraping of the backend /metrics endpoint. Enable the
+  # ServiceMonitor only if the Prometheus Operator (kube-prometheus-stack) CRDs
+  # are installed in the cluster.
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false
+      # Scrape interval; "" inherits the Prometheus default.
+      interval: ""
+      scrapeTimeout: ""
+      # Extra labels so a Prometheus with a release selector picks this up
+      # (e.g. release: kube-prometheus-stack).
+      labels: {}
 
 frontend:
   image:
