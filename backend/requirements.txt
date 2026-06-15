@@ -5,3 +5,4 @@ psycopg[binary]==3.2.4
 gunicorn==23.0.0
 requests==2.32.3
 google-auth==2.38.0
+django-prometheus==2.3.1
