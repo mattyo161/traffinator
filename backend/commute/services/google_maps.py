@@ -6,9 +6,11 @@ backend` shows exactly what is being asked of Google and what came back.
 
 import logging
 import os
+import time
 
 import requests
 
+from commute import metrics
 from commute.coords import round_coord
 from commute.models import Setting
 
@@ -50,13 +52,26 @@ def is_configured():
 def _request(url, params, label):
     redacted = {k: v for k, v in params.items() if k != "key"}
     logger.info("Google request [%s]: %s params=%s", label, url, redacted)
+    # Endpoint label for metrics: "distance-matrix/best_guess" -> "distance_matrix".
+    endpoint = label.split("/")[0].replace("-", "_")
+    start = time.monotonic()
     try:
         resp = requests.get(url, params=params, timeout=30)
     except requests.RequestException as exc:
+        metrics.EXTERNAL_API_DURATION.labels("google_maps", endpoint).observe(
+            time.monotonic() - start
+        )
+        metrics.record_call("google_maps", endpoint, "paid", "error")
         logger.error("Google request [%s] failed: %s", label, exc)
         raise GoogleMapsError(f"Google Maps request failed: {exc}") from exc
     data = resp.json()
     status = data.get("status")
+    metrics.EXTERNAL_API_DURATION.labels("google_maps", endpoint).observe(
+        time.monotonic() - start
+    )
+    metrics.record_call(
+        "google_maps", endpoint, "paid", "ok" if (resp.ok and status == "OK") else "error"
+    )
     logger.info(
         "Google response [%s]: http=%s status=%s error=%s",
         label, resp.status_code, status, data.get("error_message"),

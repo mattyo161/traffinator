@@ -1,0 +1,30 @@
+{{- if and .Values.backend.metrics.enabled .Values.backend.metrics.serviceMonitor.enabled }}
+{{- $sm := .Values.backend.metrics.serviceMonitor }}
+# Prometheus Operator ServiceMonitor for the backend /metrics endpoint.
+# Requires the monitoring.coreos.com CRDs (kube-prometheus-stack). The backend
+# Service exposes /metrics on the same "http" port (8000); django-prometheus
+# aggregates across gunicorn workers via PROMETHEUS_MULTIPROC_DIR.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "traffinator.backend.fullname" . }}
+  labels:
+    {{- include "traffinator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+    {{- with $sm.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "traffinator.selectorLabels" (dict "ctx" . "component" "backend") | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      {{- with $sm.interval }}
+      interval: {{ . | quote }}
+      {{- end }}
+      {{- with $sm.scrapeTimeout }}
+      scrapeTimeout: {{ . | quote }}
+      {{- end }}
+{{- end }}

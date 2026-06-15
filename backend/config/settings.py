@@ -14,12 +14,17 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "rest_framework",
     "rest_framework.authtoken",
+    "django_prometheus",
     "commute",
 ]
 
+# django-prometheus: the Before middleware must be FIRST and the After middleware
+# LAST so it wraps the whole request for accurate request/latency metrics.
 MIDDLEWARE = [
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

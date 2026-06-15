@@ -14,6 +14,7 @@ import os
 
 import requests
 
+from commute import metrics
 from commute.models import RouteGeometry
 
 logger = logging.getLogger("commute.routing")
@@ -60,12 +61,13 @@ def _fetch_ors(origin, destination, key):
     ]}
     logger.info("Route request [openrouteservice]: %s -> %s",
                 (origin["lat"], origin["lng"]), (destination["lat"], destination["lng"]))
-    resp = requests.post(ORS_URL, json=body, headers={"Authorization": key}, timeout=20)
-    if resp.status_code != 200:
-        raise RoutingError(f"OpenRouteService error {resp.status_code}: {resp.text[:200]}")
-    feat = resp.json()["features"][0]
-    coords = feat["geometry"]["coordinates"]  # [lng, lat]
-    distance = feat["properties"]["summary"].get("distance")
+    with metrics.track_call("openrouteservice", "directions", "free"):
+        resp = requests.post(ORS_URL, json=body, headers={"Authorization": key}, timeout=20)
+        if resp.status_code != 200:
+            raise RoutingError(f"OpenRouteService error {resp.status_code}: {resp.text[:200]}")
+        feat = resp.json()["features"][0]
+        coords = feat["geometry"]["coordinates"]  # [lng, lat]
+        distance = feat["properties"]["summary"].get("distance")
     return [[lat, lng] for lng, lat in coords], distance, "openrouteservice"
 
 
@@ -77,14 +79,15 @@ def _fetch_osrm(origin, destination):
     )
     logger.info("Route request [osrm]: %s -> %s",
                 (origin["lat"], origin["lng"]), (destination["lat"], destination["lng"]))
-    resp = requests.get(url, timeout=20)
-    if resp.status_code != 200:
-        raise RoutingError(f"OSRM error {resp.status_code}: {resp.text[:200]}")
-    data = resp.json()
-    if data.get("code") != "Ok" or not data.get("routes"):
-        raise RoutingError(f"OSRM returned no route (code={data.get('code')}).")
-    route = data["routes"][0]
-    coords = route["geometry"]["coordinates"]  # [lng, lat]
+    with metrics.track_call("osrm", "directions", "free"):
+        resp = requests.get(url, timeout=20)
+        if resp.status_code != 200:
+            raise RoutingError(f"OSRM error {resp.status_code}: {resp.text[:200]}")
+        data = resp.json()
+        if data.get("code") != "Ok" or not data.get("routes"):
+            raise RoutingError(f"OSRM returned no route (code={data.get('code')}).")
+        route = data["routes"][0]
+        coords = route["geometry"]["coordinates"]  # [lng, lat]
     return [[lat, lng] for lng, lat in coords], route.get("distance"), "osrm"
 
 
@@ -93,6 +96,7 @@ def get_route(origin, destination):
     cached = _find_cached(origin, destination)
     if cached:
         logger.info("Route cache HIT: sample #%s (%s)", cached.id, cached.provider)
+        metrics.record_cache_hit(cached.provider, "directions", "free")
         return {
             "geometry": cached.geometry,
             "distance_m": cached.distance_m,
